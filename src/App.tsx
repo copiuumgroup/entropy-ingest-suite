@@ -6,7 +6,7 @@ import { useAudioEngine } from './useAudioEngine';
 import type { EQSettings } from './useAudioEngine';
 import { useExporter } from './useExporter';
 import Waveform from './Waveform';
-// import StudioVisualizer from './StudioVisualizer';
+import StudioVisualizer from './StudioVisualizer';
 import HubView from './views/HubView';
 import { db } from './db/database';
 import type { ProjectMetadata } from './db/database';
@@ -489,8 +489,12 @@ function App() {
             <div className="flex-1 flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-500">
               
               <div className="flex flex-col gap-4 relative">
-                 {/* Visualizer disabled for now - reserved for later */}
-                  <div className="h-2 opacity-0" />
+                 {/* Visualizer */}
+                 <StudioVisualizer 
+                   analyser={analyser} 
+                   eq={activeTrack.eq} 
+                   audioCtx={audioCtx} 
+                 />
                  
                  <div className="flex items-center justify-between px-4">
                     <div className="flex items-center gap-4">
