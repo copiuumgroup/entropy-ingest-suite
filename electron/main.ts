@@ -6,6 +6,7 @@ import * as mm from 'music-metadata';
 import axios from 'axios';
 import NodeID3 from 'node-id3';
 import { spawn } from 'child_process';
+import os from 'os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,18 +32,21 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
     },
-    titleBarStyle: 'default',
-    transparent: process.platform === 'win32',
-    backgroundColor: process.platform === 'win32' ? '#00000000' : '#0a0a0a',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#00000000',
+      symbolColor: '#ffffff',
+      height: 32
+    },
+    transparent: true,
+    backgroundColor: '#00000000',
   });
 
-  if (process.platform === 'win32') {
-    const osRelease = require('os').release().split('.');
-    if (parseInt(osRelease[0]) >= 10 && parseInt(osRelease[2]) >= 22000) {
-      win.setBackgroundMaterial('mica');
-    } else {
-      win.setBackgroundMaterial('acrylic');
-    }
+  const osRelease = os.release().split('.');
+  if (parseInt(osRelease[0]) >= 10 && parseInt(osRelease[2]) >= 22000) {
+    win.setBackgroundMaterial('mica');
+  } else {
+    win.setBackgroundMaterial('acrylic');
   }
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -52,7 +56,7 @@ function createWindow() {
   }
 
   win.once('ready-to-show', () => {
-    win.maximize(); 
+    win.maximize();
     win.show();
   });
 }
@@ -67,7 +71,7 @@ app.whenReady().then(() => {
           "script-src 'self' 'unsafe-eval' 'unsafe-inline' studio:; " +
           "style-src 'self' 'unsafe-inline' studio: https://fonts.googleapis.com; " +
           "font-src 'self' studio: https://fonts.gstatic.com; " +
-          "img-src 'self' studio: data: blob: *; " + 
+          "img-src 'self' studio: data: blob: *; " +
           "media-src 'self' studio: blob: data: *; " +
           "connect-src 'self' studio: *;"
         ]
@@ -110,7 +114,7 @@ ipcMain.handle('get-metadata', async (_event, filePath) => {
 
 ipcMain.handle('cobalt-api-call', async (_event, trackUrl) => {
   let lastError = '';
-  
+
   for (const instance of COBALT_MIRRORS) {
     try {
       console.log(`Trying Cobalt Mirror: ${instance}`);
@@ -160,7 +164,7 @@ ipcMain.handle('ytdlp-download', async (_event, trackUrl) => {
 
     let errorOutput = '';
     process.stderr.on('data', (data) => { errorOutput += data.toString(); });
-    
+
     process.on('close', (code) => {
       if (code === 0) resolve({ success: true });
       else resolve({ success: false, error: errorOutput || 'yt-dlp failed' });
@@ -207,6 +211,55 @@ ipcMain.handle('download-with-metadata', async (_event, url, metadata) => {
   }
 });
 
+ipcMain.handle('read-file', async (_event, filePath) => {
+  try {
+    console.log(`[IPC] Reading Vaulted File: ${filePath}`);
+    if (!fs.existsSync(filePath)) {
+      console.error(`[IPC] File Not Found: ${filePath}`);
+      return null;
+    }
+    return fs.readFileSync(filePath);
+  } catch (e) {
+    console.error(`[IPC] Read Error: ${e.message}`);
+    return null;
+  }
+});
+
+ipcMain.handle('cache-audio-file', async (_event, sourcePath, fileName, buffer?) => {
+  try {
+    const archivesPath = path.join(app.getPath('userData'), 'archives');
+    if (!fs.existsSync(archivesPath)) fs.mkdirSync(archivesPath, { recursive: true });
+    
+    // Check source size for unique naming if from disk
+    let fileSize = 0;
+    if (sourcePath && fs.existsSync(sourcePath)) {
+      fileSize = fs.statSync(sourcePath).size;
+    } else if (buffer) {
+      fileSize = buffer.byteLength;
+    }
+
+    const safeName = fileName.replace(/[\\/:*?"<>|]/g, '');
+    const vaultName = `${fileSize}-${safeName}`;
+    const targetPath = path.join(archivesPath, vaultName);
+
+    // Idempotency check: if file already vaulted, don't copy again
+    if (fs.existsSync(targetPath)) return targetPath;
+
+    if (buffer) {
+      fs.writeFileSync(targetPath, Buffer.from(buffer));
+    } else if (sourcePath) {
+      fs.copyFileSync(sourcePath, targetPath);
+    } else {
+      return null;
+    }
+    
+    return targetPath;
+  } catch (e) {
+    console.error('Cache Audio Error:', e);
+    return null;
+  }
+});
+
 ipcMain.handle('save-file', async (_event, fileName, arrayBuffer) => {
   const musicPath = app.getPath('music');
   const filePath = path.join(musicPath, fileName);
@@ -214,4 +267,4 @@ ipcMain.handle('save-file', async (_event, fileName, arrayBuffer) => {
   return filePath;
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { app.quit(); });

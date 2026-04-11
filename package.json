@@ -67,12 +67,11 @@
         "portable"
       ]
     },
-    "linux": {
+    "win": {
       "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Audio"
+        "nsis",
+        "portable"
+      ]
     }
   }
 }

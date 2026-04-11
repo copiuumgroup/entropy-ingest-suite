@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UploadCloud, Play, Pause, Download, Settings2, Music, X, Loader2, ListMusic, Plus, Zap, Volume2, ShieldCheck, Activity, CheckCircle2, Home } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { UploadCloud, Play, Pause, Download, Settings2, Music, X, Loader2, ListMusic, Plus, Zap, Volume2, ShieldCheck, Activity, CheckCircle2, Home, AlertTriangle } from 'lucide-react';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAudioEngine } from './useAudioEngine';
@@ -21,6 +21,8 @@ declare global {
       cobaltApiCall: (url: string) => Promise<{ success: boolean; url?: string; mirror?: string; error?: string }>;
       downloadWithMetadata: (url: string, metadata: any) => Promise<{ success: boolean; path?: string; error?: string }>;
       ytdlpDownload: (url: string) => Promise<{ success: boolean; error?: string }>;
+      readFile: (path: string) => Promise<ArrayBuffer | null>;
+      cacheAudioFile: (sourcePath: string | null, fileName: string, buffer?: ArrayBuffer) => Promise<string | null>;
     };
   }
 }
@@ -46,12 +48,24 @@ interface Track {
     artist?: string;
     coverArt?: string;
   };
+  hasError?: boolean;
+  errorMsg?: string;
+  lastPreset?: string;
+  prePresetSettings?: {
+    speed: number;
+    reverbWet: number;
+    eq: EQSettings;
+    limiter: boolean;
+  };
+  needsRelink?: boolean;
+  internalPath?: string;
 }
 
 function App() {
   const [view, setView] = useState<'hub' | 'studio'>('hub');
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
-  const [isWindows] = useState(window.navigator.platform.indexOf('Win') > -1);
+  const isSavingRef = useRef(false);
+  const [isWindows] = useState(true); // Always true for this Windows-only project
   
   const [tracks, setTracks] = useState<Track[]>([]);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -88,6 +102,9 @@ function App() {
 
   // Desktop Path Detection
   useEffect(() => {
+    // Apply platform class to body for Mica/Transparency CSS
+    document.body.classList.add('is-windows');
+    
     if (window.electronAPI) {
       window.electronAPI.getMusicPath().then(path => {
         setMusicPath(path);
@@ -99,44 +116,57 @@ function App() {
   useEffect(() => {
     if (!audioCtx) return;
     tracks.forEach(async (track) => {
-      if (track.isReady || track.buffer) return;
+      if (track.isReady || track.buffer || track.hasError || track.needsRelink || track.file.size === 0) return;
       try {
         const arrayBuffer = await track.file.arrayBuffer();
         const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         setTracks(prev => prev.map(t => 
-          t.id === track.id ? { ...t, buffer: decodedBuffer, isReady: true } : t
+          t.id === track.id ? { ...t, buffer: decodedBuffer, isReady: true, hasError: false } : t
         ));
-      } catch (e) {
-        console.error("Decoding failed", e);
+      } catch (e: any) {
+        console.error("Decoding failed for", track.file.name, e);
+        setTracks(prev => prev.map(t => 
+          t.id === track.id ? { ...t, hasError: true, errorMsg: e.message } : t
+        ));
       }
     });
   }, [tracks, audioCtx]);
 
-  // Auto-save logic
+  // Auto-save logic with race condition protection
   useEffect(() => {
-    if (view === 'studio' && activeTrack) {
+    if (view === 'studio' && activeTrack && !isSavingRef.current) {
       const saveProject = async () => {
-        const projectData: ProjectMetadata = {
-          id: currentProjectId || undefined,
-          name: activeTrack.metadata?.title || activeTrack.file.name,
-          artist: activeTrack.metadata?.artist,
-          coverArt: activeTrack.metadata?.coverArt,
-          filePath: (activeTrack.file as any).path,
-          lastModified: Date.now(),
-          settings: {
-            speed: activeTrack.speed,
-            reverbWet: activeTrack.reverbWet,
-            eq: activeTrack.eq,
-            attenuation: activeTrack.attenuation,
-            limiter: activeTrack.limiter
+        isSavingRef.current = true;
+        try {
+          const projectData: ProjectMetadata = {
+            id: currentProjectId || undefined,
+            name: activeTrack.metadata?.title || activeTrack.file.name,
+            artist: activeTrack.metadata?.artist,
+            coverArt: activeTrack.metadata?.coverArt,
+            filePath: activeTrack.internalPath || (activeTrack.file as any).path,
+            lastModified: Date.now(),
+            settings: {
+              speed: activeTrack.speed,
+              reverbWet: activeTrack.reverbWet,
+              eq: activeTrack.eq,
+              attenuation: activeTrack.attenuation,
+              limiter: activeTrack.limiter
+            }
+          };
+
+          const id = await db.projects.put(projectData);
+          if (!currentProjectId) {
+             setCurrentProjectId(id as number);
           }
-        };
-        const id = await db.projects.put(projectData);
-        if (!currentProjectId) setCurrentProjectId(id as number);
+        } finally {
+          isSavingRef.current = false;
+        }
       };
-      saveProject();
+      
+      const timer = setTimeout(saveProject, 500);
+      return () => clearTimeout(timer);
     }
-  }, [view, activeTrack?.speed, activeTrack?.eq, activeTrack?.reverbWet]);
+  }, [view, activeTrack?.speed, activeTrack?.eq, activeTrack?.reverbWet, activeTrack?.internalPath, currentProjectId]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -158,36 +188,64 @@ function App() {
       if (!activeTrackId) setActiveTrackId(newTracks[0].id);
       setView('studio');
 
-      // Async Metadata Fetch
+      // Async Metadata Fetch & Internalization
       newTracks.forEach(async (track) => {
         if (window.electronAPI) {
           const path = (track.file as any).path;
           if (path) {
+            // Initial Metadata
             const meta = await window.electronAPI.getMetadata(path);
             if (meta) setTracks(prev => prev.map(t => t.id === track.id ? { ...t, metadata: meta } : t));
+            
+            // Immediate Vaulting
+            if (!path.includes('archives')) {
+               const internalPath = await window.electronAPI.cacheAudioFile(path, track.file.name);
+               if (internalPath) {
+                  setTracks(prev => prev.map(t => t.id === track.id ? { ...t, internalPath } : t));
+               }
+            }
           }
         }
       });
     }
   };
 
+  const handleDeleteProject = async (id: number) => {
+    await db.projects.delete(id);
+    if (currentProjectId === id) {
+       setCurrentProjectId(null);
+       setTracks([]);
+       setActiveTrackId(null);
+    }
+  };
+
   const openProject = async (project: ProjectMetadata) => {
-     // For now, we need to re-drag the file if it's not present (web sandbox)
-     // But in Electron we can try to find it. 
-     // For this basic persistent demo, we'll prompt a "Select File" if path is broken, 
-     // or just load the settings and wait for an upload if we are on web.
-     // In this hardened desktop suite, we'll assume the user might need to re-link if it's moved.
+     let projectFile = new File([""], project.name, { type: "audio/mpeg" });
+     let needsRelink = false;
      
-     // Transitioning setting
-     const dummyFile = new File([""], project.name, { type: "audio/mpeg" });
+     if (window.electronAPI && project.filePath) {
+        const buffer = await window.electronAPI.readFile(project.filePath);
+        if (buffer) {
+           projectFile = new File([buffer], project.name, { type: "audio/mpeg" });
+           (projectFile as any).path = project.filePath;
+        } else {
+           needsRelink = true;
+        }
+     } else if (!window.electronAPI) {
+        // Web fallback: Always needs relink if not local
+        needsRelink = true;
+     }
+
      const loadedTrack: Track = {
         id: 'legacy-track',
-        file: dummyFile,
+        file: projectFile,
         buffer: null,
         speed: project.settings.speed,
         reverbWet: project.settings.reverbWet,
         nightcore: false,
         isReady: false,
+        needsRelink,
+        internalPath: project.filePath?.includes('archives') ? project.filePath : undefined,
         eq: project.settings.eq,
         attenuation: project.settings.attenuation,
         limiter: project.settings.limiter,
@@ -216,18 +274,58 @@ function App() {
 
   const applyPreset = (type: 'slowed' | 'nightcore' | 'quake' | 'crisp') => {
     if (!activeTrack) return;
+    
+    // Toggle check: If the same preset is clicked again, revert to pre-preset settings
+    if (activeTrack.lastPreset === type && activeTrack.prePresetSettings) {
+      updateActiveTrack({
+        ...activeTrack.prePresetSettings,
+        lastPreset: undefined,
+        prePresetSettings: undefined
+      });
+      return;
+    }
+
+    // Save current state before applying the preset
+    const currentSettings = {
+      speed: activeTrack.speed,
+      reverbWet: activeTrack.reverbWet,
+      eq: activeTrack.eq,
+      limiter: activeTrack.limiter
+    };
+
     switch(type) {
       case 'slowed':
-        updateActiveTrack({ speed: 0.85, reverbWet: 0.6, nightcore: false });
+        updateActiveTrack({ 
+          speed: 0.85, 
+          reverbWet: 0.6, 
+          nightcore: false, 
+          lastPreset: type,
+          prePresetSettings: currentSettings 
+        });
         break;
       case 'nightcore':
-        updateActiveTrack({ speed: 1.35, reverbWet: 0.1, nightcore: true });
+        updateActiveTrack({ 
+          speed: 1.35, 
+          reverbWet: 0.1, 
+          nightcore: true, 
+          lastPreset: type,
+          prePresetSettings: currentSettings 
+        });
         break;
       case 'quake':
-        updateActiveTrack({ eq: { sub: 10, bass: 6, mid: -2, treble: -4, air: -2 }, limiter: true });
+        updateActiveTrack({ 
+          eq: { sub: 10, bass: 6, mid: -2, treble: -4, air: -2 }, 
+          limiter: true, 
+          lastPreset: type,
+          prePresetSettings: currentSettings 
+        });
         break;
       case 'crisp':
-        updateActiveTrack({ eq: { sub: -2, bass: 0, mid: 2, treble: 6, air: 8 } });
+        updateActiveTrack({ 
+          eq: { sub: -2, bass: 0, mid: 2, treble: 6, air: 8 }, 
+          lastPreset: type,
+          prePresetSettings: currentSettings 
+        });
         break;
     }
   };
@@ -262,14 +360,17 @@ function App() {
     <div className={cn(
       "w-full max-w-[1700px] mx-auto p-6 min-h-screen flex flex-col transition-all duration-1000",
       isClassicMode && "is-classic",
-      isWindows && "is-windows"
+      "is-windows"
     )}>
+      {/* Title Bar Draggable Region */}
+      <div className="fixed top-0 left-0 w-full h-8 title-bar-drag z-[100] pointer-events-none" />
       
       <AnimatePresence mode="wait">
         {view === 'hub' ? (
           <HubView 
             onUpload={handleFileUpload} 
             onOpenProject={openProject} 
+            onDeleteProject={handleDeleteProject}
           />
         ) : (
           <motion.div 
@@ -280,7 +381,7 @@ function App() {
             className="flex-1 flex flex-col"
           >
             {/* Header / Mini Title */}
-            <div className={cn("transition-all duration-700 flex flex-col items-center mb-6 mt-4")}>
+            <div className={cn("transition-all duration-700 flex flex-col items-center mb-6 mt-8")}>
               {!activeTrackId ? (
                 <div className="text-center animate-in fade-in slide-in-from-top-4 duration-700 py-20">
                   <h1 className="text-8xl font-black tracking-tighter text-[var(--color-primary)]">Material Audio</h1>
@@ -289,7 +390,7 @@ function App() {
               ) : (
                 <div className="w-full flex items-center justify-between px-4">
                   <div 
-                    className="flex items-center gap-4 opacity-40 hover:opacity-100 transition-all cursor-pointer group"
+                    className="flex items-center gap-4 opacity-40 hover:opacity-100 transition-all cursor-pointer group title-bar-no-drag"
                     onClick={() => setView('hub')}
                   >
                     <div className="w-10 h-10 rounded-2xl bg-[var(--color-surface-variant)] flex items-center justify-center group-hover:bg-[var(--color-primary)] group-hover:text-[var(--color-on-primary)] transition-all">
@@ -298,7 +399,7 @@ function App() {
                     <h1 className="text-xl font-black tracking-tighter uppercase select-none group-hover:translate-x-1 transition-transform">Studio Workspace</h1>
                   </div>
                   
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 title-bar-no-drag">
                      <div className="px-4 py-2 bg-[var(--color-surface-variant)] rounded-full border border-[var(--color-outline)] border-opacity-10 shadow-sm flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         <span className="text-[10px] font-black uppercase opacity-60">Live Persistence Active</span>
@@ -327,34 +428,48 @@ function App() {
               {tracks.map(track => (
                 <div 
                   key={track.id}
-                  onClick={() => setActiveTrackId(track.id)}
+                  onClick={() => !track.hasError && setActiveTrackId(track.id)}
                   className={cn(
-                    "p-4 rounded-[32px] cursor-pointer transition-all duration-300 flex items-center gap-4 group",
-                    activeTrackId === track.id 
-                      ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xl scale-[1.02]" 
-                      : "bg-[var(--color-surface-variant)] hover:bg-[var(--color-surface)] border border-transparent hover:border-[var(--color-outline)]"
+                    "p-4 rounded-[32px] cursor-pointer transition-all duration-300 flex items-center gap-4 group relative",
+                    track.hasError 
+                      ? "status-error opacity-80" 
+                      : activeTrackId === track.id 
+                        ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xl scale-[1.02]" 
+                        : "bg-[var(--color-surface-variant)] hover:bg-[var(--color-surface)] border border-transparent hover:border-[var(--color-outline)]"
                   )}
                 >
                   <div className={cn(
                     "w-12 h-12 rounded-[20px] flex items-center justify-center shrink-0 transition-all overflow-hidden relative",
-                    activeTrackId === track.id ? "bg-[var(--color-on-primary)] rotate-12" : "bg-[var(--color-outline)]"
+                    track.hasError ? "bg-red-500/20" : activeTrackId === track.id ? "bg-[var(--color-on-primary)] rotate-12" : "bg-[var(--color-outline)]"
                   )}>
                     {track.metadata?.coverArt ? (
                       <img src={track.metadata.coverArt} className="w-full h-full object-cover" alt="" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center" style={{ 
-                        background: `linear-gradient(135deg, hsl(${track.file.name.length * 20 % 360}, 70%, 50%), hsl(${(track.file.name.length * 20 + 60) % 360}, 70%, 30%))`
+                        background: track.hasError ? 'transparent' : `linear-gradient(135deg, hsl(${(track.file?.name || 'default').length * 20 % 360}, 70%, 50%), hsl(${((track.file?.name || 'default').length * 20 + 60) % 360}, 70%, 30%))`
                       }}>
-                        {track.isReady ? <Music className={cn("w-5 h-5", activeTrackId === track.id ? "text-[var(--color-primary)]" : "text-[var(--color-surface)]")}/> : <Loader2 className="w-5 h-5 animate-spin"/>}
+                        {track.hasError ? <AlertTriangle className="w-5 h-5 text-red-500"/> : track.isReady ? <Music className={cn("w-5 h-5", activeTrackId === track.id ? "text-[var(--color-primary)]" : "text-[var(--color-surface)]")}/> : <Loader2 className="w-5 h-5 animate-spin"/>}
                       </div>
                     )}
                   </div>
                   <div className="flex-1 truncate">
-                    <p className="font-bold text-sm truncate">{track.metadata?.title || track.file.name}</p>
+                    <p className="font-bold text-sm truncate">{track.metadata?.title || track.file?.name || 'Unknown Track'}</p>
                     <p className="text-[10px] uppercase font-black opacity-60">
-                      {track.metadata?.artist || 'Unknown Artist'}
+                      {track.hasError ? (track.errorMsg || 'Decoding Failed') : (track.metadata?.artist || 'Unknown Artist')}
                     </p>
                   </div>
+                  
+                  {/* Remove Button */}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTracks(prev => prev.filter(t => t.id !== track.id));
+                      if (activeTrackId === track.id) setActiveTrackId(null);
+                    }}
+                    className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -395,14 +510,31 @@ function App() {
                 
                 {/* Waveform & Playback */}
                 <div className="flex-1 flex flex-col gap-6">
-                  <div className="my-card bg-[var(--color-surface)] shadow-lg p-6">
-                    <Waveform 
-                      buffer={activeTrack?.buffer || null} 
-                      currentTime={currentTime} 
-                      duration={duration} 
-                      onSeek={seekTo} 
-                    />
-                  </div>
+                  {activeTrack.needsRelink ? (
+                    <div className="my-card flex-1 flex flex-col items-center justify-center p-12 text-center bg-[var(--color-surface-variant)] border-2 border-dashed border-red-500/20">
+                       <AlertTriangle className="w-16 h-16 text-red-500 mb-4 opacity-40" />
+                       <h2 className="text-2xl font-black uppercase tracking-tighter">Session File Missing</h2>
+                       <p className="text-sm opacity-40 mt-2 mb-8 max-w-md">The original audio file for this project could not be found on your drive. Re-link it to continue mastering.</p>
+                       <label className="my-button my-button-primary px-10 py-4 cursor-pointer">
+                          Re-link Session
+                          <input type="file" accept="audio/*" className="hidden" onChange={(e) => {
+                             if (e.target.files?.[0]) {
+                                const file = e.target.files[0];
+                                updateActiveTrack({ file, needsRelink: false, isReady: false, hasError: false });
+                             }
+                          }}/>
+                       </label>
+                    </div>
+                  ) : (
+                    <div className="my-card bg-[var(--color-surface)] shadow-lg p-6">
+                      <Waveform 
+                        buffer={activeTrack.buffer || null} 
+                        currentTime={currentTime} 
+                        duration={duration} 
+                        onSeek={seekTo} 
+                      />
+                    </div>
+                  )}
 
                   <div className="flex gap-4">
                     <button 
@@ -445,10 +577,42 @@ function App() {
 
                     {/* Quick Mastering Presets */}
                     <div className="grid grid-cols-2 gap-3">
-                       <button onClick={() => applyPreset('slowed')} className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-2xl hover:scale-[1.03] transition-all text-[10px] font-black uppercase"><Zap className="w-3 h-3 text-[var(--color-primary)] opacity-40" /> Slowed + Rev</button>
-                       <button onClick={() => applyPreset('nightcore')} className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-2xl hover:scale-[1.03] transition-all text-[10px] font-black uppercase"><Zap className="w-3 h-3 text-[var(--color-primary)] opacity-60" /> Nightcore</button>
-                       <button onClick={() => applyPreset('quake')} className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-2xl hover:scale-[1.03] transition-all text-[10px] font-black uppercase"><Zap className="w-3 h-3 text-[var(--color-primary)]" /> Bass Quake</button>
-                       <button onClick={() => applyPreset('crisp')} className="flex items-center gap-2 p-3 bg-[var(--color-surface)] rounded-2xl hover:scale-[1.03] transition-all text-[10px] font-black uppercase"><Zap className="w-3 h-3 text-[var(--color-primary)] opacity-80" /> High Crisp</button>
+                       <button 
+                        onClick={() => applyPreset('slowed')} 
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase",
+                          activeTrack?.lastPreset === 'slowed' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]"
+                        )}
+                       >
+                          <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === 'slowed' ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)] opacity-40")} /> Slowed + Rev
+                       </button>
+                       <button 
+                        onClick={() => applyPreset('nightcore')} 
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase",
+                          activeTrack?.lastPreset === 'nightcore' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]"
+                        )}
+                       >
+                          <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === 'nightcore' ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)] opacity-60")} /> Nightcore
+                       </button>
+                       <button 
+                        onClick={() => applyPreset('quake')} 
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase",
+                          activeTrack?.lastPreset === 'quake' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]"
+                        )}
+                       >
+                          <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === 'quake' ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)]")} /> Bass Quake
+                       </button>
+                       <button 
+                        onClick={() => applyPreset('crisp')} 
+                        className={cn(
+                          "flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase",
+                          activeTrack?.lastPreset === 'crisp' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]"
+                        )}
+                       >
+                          <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === 'crisp' ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)] opacity-80")} /> High Crisp
+                       </button>
                     </div>
 
                     {/* 5-Band EQ Sliders */}

@@ -18,8 +18,8 @@
   --color-error: #ba1a1a;
   --color-error-container: #ffdad6;
   
-  --font-family-body: 'Outfit', 'Inter', system-ui, sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-family-body: 'Segoe UI Variable Text', 'Segoe UI', 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-family-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
 }
 
 :root {
@@ -87,8 +87,17 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.is-windows #root {
-  background-color: rgba(0, 0, 0, 0.6) !important;
+body.is-windows #root {
+  background-color: rgba(0, 0, 0, 0.45) !important; /* Material 3 translucent surface */
+  backdrop-filter: blur(20px);
+}
+
+.title-bar-drag {
+  -webkit-app-region: drag;
+}
+
+.title-bar-no-drag {
+  -webkit-app-region: no-drag;
 }
 
 /* Material 3 Expressive Shapes (Android 15+ style) */

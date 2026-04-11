@@ -232,9 +232,10 @@ export function useAudioEngine(
     if (!activeBuffer) return;
     const wasPlaying = isPlaying;
     if (wasPlaying) setIsPlaying(false);
-    const newTime = Math.max(0, Math.min(time, activeBuffer.duration));
-    setPausedAt(newTime);
-    setCurrentTime(newTime);
+    // UI provides "scaled" time, convert back to buffer position
+    const bufferPos = Math.max(0, Math.min(time * speed, activeBuffer.duration));
+    setPausedAt(bufferPos);
+    setCurrentTime(bufferPos);
     if (wasPlaying) setTimeout(() => setIsPlaying(true), 10);
   };
 
@@ -289,8 +290,8 @@ export function useAudioEngine(
   return {
     isPlaying,
     setIsPlaying,
-    currentTime,
-    duration: activeBuffer?.duration || 0,
+    currentTime: currentTime / speed,
+    duration: (activeBuffer?.duration || 0) / speed,
     seekTo,
     renderBuffer,
     audioCtx,

@@ -11,6 +11,22 @@ export default defineConfig({
     electron([
       {
         entry: 'electron/main.ts',
+        vite: {
+          build: {
+            rollupOptions: {
+              external: [
+                'electron',
+                'music-metadata',
+                'node-id3',
+                'axios',
+                'fs',
+                'path',
+                'url',
+                'child_process'
+              ]
+            }
+          }
+        }
       },
       {
         entry: 'electron/preload.ts',
