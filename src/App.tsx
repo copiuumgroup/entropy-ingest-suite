@@ -127,6 +127,7 @@ function App() {
     activeTrack?.punch || 0,
     activeTrack?.tail || 0,
     activeTrack?.isElastic || false,
+    activeTrack?.nightcore || false,
     (bpm: number, genre: string, suggested: any) => {
       updateActiveTrack({ 
         detectedBpm: bpm, 
@@ -177,7 +178,7 @@ function App() {
         }
 
         setTracks(prev => prev.map(t =>
-          t.id === track.id ? { ...t, buffer: decodedBuffer, isReady: true, hasError: false } : t
+          t.id === track.id ? { ...t, buffer: decodedBuffer, isReady: true, hasError: false, isElastic: t.nightcore ? false : t.isElastic } : t
         ));
       } catch (err: any) {
         console.error('Mastering Initialization Error:', err);
@@ -206,7 +207,8 @@ function App() {
               roomSize: activeTrack.roomSize,
               eq: activeTrack.eq,
               attenuation: activeTrack.attenuation,
-              limiter: activeTrack.limiter
+              limiter: activeTrack.limiter,
+              nightcore: activeTrack.nightcore
             },
             detectedBpm: activeTrack.detectedBpm,
             detectedGenre: activeTrack.detectedGenre,
@@ -241,10 +243,10 @@ function App() {
           eq: { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 },
           attenuation: 1.0,
           limiter: false,
-          roomSize: 0.5,
+          roomSize: 0.6,
           punch: 0,
           tail: 0,
-          isElastic: false,
+          isElastic: !isVideo, // Standard audio uses Vocoder, Video/Nightcore uses Varispeed
           videoPath: isVideo ? (file as any).path : undefined
         };
       });
@@ -298,7 +300,7 @@ function App() {
       buffer: null,
       speed: project.settings.speed,
       reverbWet: project.settings.reverbWet,
-      nightcore: false,
+      nightcore: project.settings.nightcore || false,
       isReady: false,
       needsRelink,
       internalPath: project.filePath?.includes('archives') ? project.filePath : undefined,
@@ -332,7 +334,7 @@ function App() {
     updateActiveTrack({ eq: newEq });
   };
 
-  const applyPreset = (type: 'slowed' | 'nightcore' | 'quake' | 'crisp') => {
+  const applyPreset = (type: 'slowed' | 'nightcore' | 'master') => {
     if (!activeTrack) return;
     if (activeTrack.lastPreset === type && activeTrack.prePresetSettings) {
       updateActiveTrack({ ...activeTrack.prePresetSettings, lastPreset: undefined, prePresetSettings: undefined });
@@ -341,16 +343,39 @@ function App() {
     const currentSettings = { speed: activeTrack.speed, reverbWet: activeTrack.reverbWet, eq: activeTrack.eq, limiter: activeTrack.limiter };
     switch (type) {
       case 'slowed':
-        updateActiveTrack({ speed: 0.78, reverbWet: 0.7, eq: { sub: 6, bass: 4, mid: -1, treble: -3, air: -2 }, nightcore: false, lastPreset: type, prePresetSettings: currentSettings });
+        updateActiveTrack({ 
+          speed: 0.80, 
+          reverbWet: 0.40, 
+          roomSize: 0.6,
+          eq: { sub: 0, bass: 0.5, mid: 0, treble: 0, air: 0.5 }, // Flat balanced master
+          nightcore: false, 
+          isElastic: true,
+          lastPreset: type, 
+          prePresetSettings: currentSettings 
+        });
         break;
       case 'nightcore':
-        updateActiveTrack({ speed: 1.35, reverbWet: 0.1, nightcore: true, lastPreset: type, prePresetSettings: currentSettings });
+        updateActiveTrack({ 
+          speed: 1.20, 
+          reverbWet: 0.0, 
+          nightcore: true, 
+          isElastic: false, 
+          eq: { sub: 0, bass: 0, mid: 0, treble: 0.5, air: 1.0 }, // Crystalline presence
+          lastPreset: type, 
+          prePresetSettings: currentSettings 
+        });
         break;
-      case 'quake':
-        updateActiveTrack({ eq: { sub: 10, bass: 6, mid: -2, treble: -4, air: -2 }, limiter: true, lastPreset: type, prePresetSettings: currentSettings });
-        break;
-      case 'crisp':
-        updateActiveTrack({ eq: { sub: -2, bass: 0, mid: 2, treble: 6, air: 8 }, lastPreset: type, prePresetSettings: currentSettings });
+      case 'master':
+        updateActiveTrack({ 
+          speed: 1.0, 
+          reverbWet: 0.0, 
+          nightcore: false, 
+          isElastic: true,
+          eq: { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 }, // Studio Reference
+          limiter: true,
+          lastPreset: type, 
+          prePresetSettings: currentSettings 
+        });
         break;
     }
   };
@@ -374,7 +399,8 @@ function App() {
       roomSize: activeTrack.roomSize,
       eq: activeTrack.eq,
       attenuation: activeTrack.attenuation,
-      limiter: activeTrack.limiter
+      limiter: activeTrack.limiter,
+      isNightcore: activeTrack.nightcore
     });
 
     clearInterval(renderTimer);
@@ -402,10 +428,12 @@ function App() {
     input.onchange = async (e: any) => {
       if (e.target.files?.[0] && relinkTrack) {
         const file = e.target.files[0];
-        const internalPath = await window.electronAPI.cacheAudioFile(file.path, file.name);
-        if (internalPath) {
-          setTracks(prev => prev.map(t => t.id === relinkTrack.id ? { ...t, file, internalPath, needsRelink: false } : t));
-          setRelinkTrack(null);
+        if (window.electronAPI) {
+          const internalPath = await window.electronAPI.cacheAudioFile(file.path, file.name);
+          if (internalPath) {
+            setTracks(prev => prev.map(t => t.id === relinkTrack.id ? { ...t, file, internalPath, needsRelink: false } : t));
+            setRelinkTrack(null);
+          }
         }
       }
     };
@@ -589,10 +617,10 @@ function App() {
                                   </button>
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                {(['slowed', 'nightcore', 'quake', 'crisp'] as const).map(p => (
-                                  <button key={p} onClick={() => applyPreset(p)} className={cn("flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase", activeTrack?.lastPreset === p ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]")}>
-                                    <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === p ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)] opacity-40")} /> {p}
+                              <div className="grid grid-cols-3 gap-3">
+                                {(['slowed', 'nightcore', 'master'] as const).map(p => (
+                                  <button key={p} onClick={() => applyPreset(p)} className={cn("flex items-center gap-2 p-3 rounded-2xl transition-all text-[10px] font-black uppercase text-center justify-center", activeTrack?.lastPreset === p ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] hover:scale-[1.03]")}>
+                                    <Zap className={cn("w-3 h-3", activeTrack?.lastPreset === p ? "text-[var(--color-on-primary)]" : "text-[var(--color-primary)] opacity-40")} /> {p === 'master' ? 'Studio Master' : p}
                                   </button>
                                 ))}
                               </div>
@@ -611,21 +639,21 @@ function App() {
                                 <div className="space-y-4">
                                   <div className="flex justify-between items-center text-[10px] font-black uppercase">
                                     <span className="opacity-40">Wetness</span>
-                                    <span className="text-[var(--color-primary)]">{Math.round(activeTrack.reverbWet * 100)}%</span>
+                                    <span className="text-[var(--color-primary)]">{Math.round((activeTrack?.reverbWet || 0) * 100)}%</span>
                                   </div>
                                   <input type="range" min="0" max="1" step="0.01" value={activeTrack?.reverbWet || 0} onChange={(e) => updateActiveTrack({ reverbWet: parseFloat(e.target.value) })} className="my-slider-track" />
                                 </div>
                                 <div className="space-y-4">
                                   <div className="flex justify-between items-center text-[10px] font-black uppercase">
                                     <span className="opacity-40">Room Size</span>
-                                    <span className="text-[var(--color-primary)]">{Math.round(activeTrack.roomSize * 100)}%</span>
+                                    <span className="text-[var(--color-primary)]">{Math.round((activeTrack?.roomSize || 0) * 100)}%</span>
                                   </div>
                                   <input type="range" min="0.1" max="1" step="0.01" value={activeTrack?.roomSize || 0.5} onChange={(e) => updateActiveTrack({ roomSize: parseFloat(e.target.value) })} className="my-slider-track" />
                                 </div>
                                 <div className="col-span-2 space-y-4 pt-2">
                                   <div className="flex justify-between items-center text-[10px] font-black uppercase">
                                     <span className="opacity-40">Master Gain</span>
-                                    <span className="text-[var(--color-primary)]">{(activeTrack.attenuation * 100).toFixed(0)}%</span>
+                                    <span className="text-[var(--color-primary)]">{((activeTrack?.attenuation || 0) * 100).toFixed(0)}%</span>
                                   </div>
                                   <input type="range" min="0" max="1.5" step="0.05" value={activeTrack?.attenuation || 1.0} onChange={(e) => updateActiveTrack({ attenuation: parseFloat(e.target.value) })} className="my-slider-track" />
                                 </div>

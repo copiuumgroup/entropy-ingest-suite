@@ -116,22 +116,22 @@
   background: transparent !important;
 }
 
-/* HIGH-DENSITY MICA EFFECT */
+/* HIGH-DENSITY MICA EFFECT - ENHANCED VIBRANCY */
 .my-card {
-  background: rgba(15, 15, 15, 0.7) !important;
-  backdrop-filter: blur(40px) saturate(180%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(10, 10, 10, 0.45) !important;
+  backdrop-filter: blur(60px) saturate(280%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 44px;
   padding: 2.5rem;
   box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8), 
-              inset 0 1px 1px rgba(255, 255, 255, 0.05);
+              inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }
 
 .studio-panel {
-  background: rgba(20, 20, 20, 0.4);
-  backdrop-filter: blur(30px);
+  background: rgba(20, 20, 20, 0.3);
+  backdrop-filter: blur(50px) saturate(200%);
   border-radius: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 2rem;
   transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }

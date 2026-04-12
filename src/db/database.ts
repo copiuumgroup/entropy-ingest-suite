@@ -21,6 +21,7 @@ export interface ProjectMetadata {
     attenuation: number;
     limiter: boolean;
     roomSize: number;
+    nightcore: boolean;
   };
   detectedBpm?: number;
   detectedGenre?: string;

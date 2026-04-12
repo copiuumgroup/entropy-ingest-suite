@@ -57,6 +57,7 @@ export function useAudioEngine(
   punch: number,
   tail: number,
   isElastic: boolean,
+  isNightcore: boolean,
   onAnalysis?: (bpm: number, genre: string, suggestedEQ: any) => void
 ) {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -122,13 +123,13 @@ export function useAudioEngine(
     dryGain.connect(summerGain);
     wetGain.connect(summerGain);
 
-    // Limiter -> Attenuator -> Analyser
+    // Limiter -> Attenuator -> Analyser (Studio Peak Mastering Tuning)
     const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -1.0;
-    limiter.knee.value = 0;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.1;
+    limiter.threshold.setTargetAtTime(-0.5, ctx.currentTime, 0.01);
+    limiter.knee.setTargetAtTime(0, ctx.currentTime, 0.01);
+    limiter.ratio.setTargetAtTime(20, ctx.currentTime, 0.01);
+    limiter.attack.setTargetAtTime(0.001, ctx.currentTime, 0.01);
+    limiter.release.setTargetAtTime(0.05, ctx.currentTime, 0.01);
 
     const attenuator = ctx.createGain();
     const analyser = ctx.createAnalyser();
@@ -277,22 +278,35 @@ export function useAudioEngine(
   }, [speed, isElastic]);
 
   useEffect(() => {
-    if (!convolverRef.current || !audioCtxRef.current) return;
-    // Real-time IR regeneration for variable acoustic spaces
-    // Small (0.1) = ~0.6s | Large (1.0) = ~8s
+    if (!convolverRef.current || !audioCtxRef.current || isNightcore) return;
+    // Debounced IR regeneration for stability
     const duration = 0.5 + (roomSize * 7.5);
     const decay = 1.0 + (roomSize * 4.0);
     convolverRef.current.buffer = createReverbIR(audioCtxRef.current, duration, decay);
-  }, [roomSize]);
+  }, [roomSize, isNightcore]);
 
   useEffect(() => {
-    if (dryGainRef.current && wetGainRef.current && audioCtxRef.current) {
+    if (!audioCtxRef.current || !filtersRef.current || !dryGainRef.current || !wetGainRef.current || !summerGainRef.current || !limiterRef.current) return;
+    const ctx = audioCtxRef.current;
+    const t = ctx.currentTime;
+    
+    // ACTIVE BYPASS LOGIC: Purity vs Textures
+    if (isNightcore) {
+      // Direct Master Route (Zero convolution jitter)
+      filtersRef.current.air.disconnect();
+      filtersRef.current.air.connect(limiterRef.current);
+    } else {
+      // Studio Signal Path (Parallel FX Processing)
+      filtersRef.current.air.disconnect();
+      filtersRef.current.air.connect(dryGainRef.current);
+      filtersRef.current.air.connect(convolverRef.current!);
+      
       const dryVal = Math.cos(reverbWet * 0.5 * Math.PI);
       const wetVal = Math.cos((1.0 - reverbWet) * 0.5 * Math.PI);
-      dryGainRef.current.gain.setTargetAtTime(dryVal, audioCtxRef.current.currentTime, 0.05);
-      wetGainRef.current.gain.setTargetAtTime(wetVal, audioCtxRef.current.currentTime, 0.05);
+      dryGainRef.current.gain.setTargetAtTime(dryVal, t, 0.05);
+      wetGainRef.current.gain.setTargetAtTime(wetVal, t, 0.05);
     }
-  }, [reverbWet]);
+  }, [reverbWet, isNightcore]);
 
   const seekTo = (time: number) => {
     if (!activeBuffer) return;
@@ -306,7 +320,7 @@ export function useAudioEngine(
 
   const renderBuffer = async (
     targetBuffer: AudioBuffer, 
-    p: { speed: number, reverb: number, roomSize: number, eq: EQSettings, attenuation: number, limiter: boolean }
+    p: { speed: number, reverb: number, roomSize: number, eq: EQSettings, attenuation: number, limiter: boolean, isNightcore: boolean }
   ): Promise<AudioBuffer | null> => {
     const offlineCtx = new OfflineAudioContext(
       targetBuffer.numberOfChannels,
@@ -332,10 +346,11 @@ export function useAudioEngine(
     wetGain.gain.value = Math.cos((1.0 - p.reverb) * 0.5 * Math.PI);
 
     const limiter = offlineCtx.createDynamicsCompressor();
-    limiter.threshold.value = -1.0;
+    limiter.threshold.value = -0.5;
+    limiter.knee.value = 0;
     limiter.ratio.value = p.limiter ? 20 : 1;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.1;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.05;
 
     const attenuator = offlineCtx.createGain();
     attenuator.gain.value = p.attenuation;
@@ -345,9 +360,15 @@ export function useAudioEngine(
     softClipper.oversample = '4x';
 
     sub.connect(bass); bass.connect(mid); mid.connect(treble); treble.connect(air);
-    air.connect(dryGain); air.connect(convolver);
-    convolver.connect(wetGain); dryGain.connect(summerGain); wetGain.connect(summerGain);
-    summerGain.connect(limiter); 
+    
+    if (p.isNightcore) {
+      air.connect(limiter);
+    } else {
+      air.connect(dryGain); air.connect(convolver);
+      convolver.connect(wetGain); dryGain.connect(summerGain); wetGain.connect(summerGain);
+      summerGain.connect(limiter);
+    }
+
     limiter.connect(softClipper);
     softClipper.connect(attenuator); 
     attenuator.connect(offlineCtx.destination);
