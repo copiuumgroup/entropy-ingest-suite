@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import type { ProjectMetadata } from '../db/database';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Music, ArrowRight, UploadCloud, Activity, CloudDownload, Loader2, CheckCircle2, AlertTriangle, Play, Trash2, Terminal } from 'lucide-react';
+import { Plus, Music, ArrowRight, UploadCloud, Activity, CloudDownload, Loader2, CheckCircle2, AlertTriangle, Play, Trash2, Terminal, FolderSearch, X } from 'lucide-react';
 
 
 
@@ -36,6 +36,7 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
   const [systemLink, setSystemLink] = useState<{ ytdlp: boolean, ffmpeg: boolean, dotnet: boolean }>({ ytdlp: false, ffmpeg: false, dotnet: false });
   const [engineMetrics, setEngineMetrics] = useState<{ electron: string, chrome: string, node: string, v8: string } | null>(null);
   const [isArchivesVisible, setIsArchivesVisible] = useState(true);
+  const [customSavePath, setCustomSavePath] = useState<string | null>(null);
   const logEndRef = React.useRef<HTMLDivElement>(null);
   const isCancelledRef = React.useRef(false);
 
@@ -140,6 +141,16 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
     }
   };
 
+  const handleSelectDirectory = async () => {
+    if (window.electronAPI) {
+      const path = await window.electronAPI.selectDownloadDirectory();
+      if (path) {
+        setCustomSavePath(path);
+        setLogs(prev => [...prev, `[SYSTEM] Download destination updated: ${path}`]);
+      }
+    }
+  };
+
   const processQueue = async () => {
     setIsProcessing(true);
     isCancelledRef.current = false;
@@ -160,7 +171,8 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
 
         const res = await window.electronAPI.ytdlpDownload(item.url, { 
           quality: ingestQuality,
-          mode: ingestMode
+          mode: ingestMode,
+          destinationPath: customSavePath || undefined
         });
         if (!res.success) throw new Error(res.error);
 
@@ -307,6 +319,23 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
                           disabled={isProcessing  || ingestMode === 'video'}
                           className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", ingestQuality === 'wav' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
                         >WAV</button>
+                        <div className="w-[1px] h-3 bg-white/10" />
+                        <button 
+                          onClick={handleSelectDirectory}
+                          disabled={isProcessing}
+                          className={cn(
+                            "px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                            customSavePath ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100"
+                          )}
+                        >
+                          <FolderSearch className="w-3 h-3" />
+                          {customSavePath ? 'Custom Path' : 'Save to...'}
+                        </button>
+                        {customSavePath && (
+                          <button onClick={() => setCustomSavePath(null)} className="p-1 hover:bg-white/10 rounded-md transition-all">
+                            <X className="w-3 h-3 opacity-40 hover:opacity-100" />
+                          </button>
+                        )}
                       </div>
                       <button 
                         onClick={handleOpenFolder}

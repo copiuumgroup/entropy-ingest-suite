@@ -5,7 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getMetadata: (filePath: string) => ipcRenderer.invoke('get-metadata', filePath),
   saveFile: (fileName: string, arrayBuffer: ArrayBuffer) => 
     ipcRenderer.invoke('save-file', fileName, arrayBuffer),
-  ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav' }) => 
+  selectDownloadDirectory: () => ipcRenderer.invoke('select-download-directory'),
+  ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video'; destinationPath?: string }) => 
     ipcRenderer.invoke('ytdlp-download', url, options),
   ytdlpCancel: () => ipcRenderer.invoke('ytdlp-cancel'),
   openMusicFolder: () => ipcRenderer.invoke('open-music-folder'),

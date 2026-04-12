@@ -20,7 +20,8 @@ declare global {
       getMusicPath: () => Promise<string>;
       getMetadata: (path: string) => Promise<{ title?: string; artist?: string; album?: string; coverArt?: string } | null>;
       saveFile: (fileName: string, buffer: ArrayBuffer) => Promise<string>;
-      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video' }) => Promise<{ success: boolean; error?: string }>;
+      selectDownloadDirectory: () => Promise<string | null>;
+      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video'; destinationPath?: string }) => Promise<{ success: boolean; error?: string }>;
       ytdlpCancel: () => Promise<boolean>;
       openMusicFolder: () => Promise<boolean>;
       checkSystemBinary: () => Promise<{ ytdlp: boolean; ffmpeg: boolean; dotnet: boolean }>;

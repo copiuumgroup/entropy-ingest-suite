@@ -202,7 +202,7 @@ ipcMain.handle('get-metadata', async (_event, filePath) => {
 ipcMain.handle('ytdlp-download', async (event, trackUrl, options) => {
   const mode = options?.mode || 'audio';
   const quality = options?.quality || 'mp3';
-  const musicPath = app.getPath('music');
+  const musicPath = options?.destinationPath || app.getPath('music');
   const win = BrowserWindow.fromWebContents(event.sender);
 
   return new Promise((resolve) => {
@@ -286,6 +286,17 @@ ipcMain.handle('open-music-folder', async () => {
   const musicPath = app.getPath('music');
   shell.openPath(musicPath);
   return true;
+});
+
+ipcMain.handle('select-download-directory', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(win!, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Select Studio Download Destination',
+    buttonLabel: 'Select Folder'
+  });
+  if (canceled) return null;
+  return filePaths[0];
 });
 
 ipcMain.handle('check-system-binary', async () => {
