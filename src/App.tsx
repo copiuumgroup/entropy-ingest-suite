@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UploadCloud, Play, Pause, Download, Settings2, Music, X, Loader2, ListMusic, Plus, Zap, ShieldCheck, Activity, CheckCircle2, Home, AlertTriangle } from 'lucide-react';
+import { UploadCloud, Play, Pause, Download, Settings2, Music, X, Loader2, ListMusic, Plus, Zap, ShieldCheck, Activity, CheckCircle2, Home, AlertTriangle, Sun, Moon, AlertCircle, FolderSearch } from 'lucide-react';
 import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useAudioEngine } from './useAudioEngine';
@@ -11,6 +11,8 @@ import HubView from './views/HubView';
 import { db } from './db/database';
 import type { ProjectMetadata } from './db/database';
 import { AnimatePresence, motion } from 'framer-motion';
+import FluidBackground from './components/FluidBackground';
+import VideoPlayer from './components/VideoPlayer';
 
 declare global {
   interface Window {
@@ -18,11 +20,15 @@ declare global {
       getMusicPath: () => Promise<string>;
       getMetadata: (path: string) => Promise<{ title?: string; artist?: string; album?: string; coverArt?: string } | null>;
       saveFile: (fileName: string, buffer: ArrayBuffer) => Promise<string>;
-      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav' }) => Promise<{ success: boolean; error?: string }>;
+      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video' }) => Promise<{ success: boolean; error?: string }>;
       ytdlpCancel: () => Promise<boolean>;
       openMusicFolder: () => Promise<boolean>;
+      checkSystemBinary: () => Promise<{ ytdlp: boolean; ffmpeg: boolean; dotnet: boolean }>;
+      purgeArchives: () => Promise<boolean>;
+      getEngineMetrics: () => Promise<{ electron: string; chrome: string; node: string; v8: string }>;
       readFile: (path: string) => Promise<ArrayBuffer | null>;
       cacheAudioFile: (sourcePath: string | null, fileName: string, buffer?: ArrayBuffer) => Promise<string | null>;
+      extractAudio: (path: string) => Promise<ArrayBuffer | null>;
       onYtdlpLog: (callback: (data: string) => void) => () => void;
     };
   }
@@ -65,13 +71,27 @@ interface Track {
   punch: number;
   tail: number;
   isElastic: boolean;
+  roomSize: number;
+  videoPath?: string;
+  sourceUrl?: string;
+  archivedAt?: number;
 }
 
 function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('studio-theme');
+    return (saved as 'light' | 'dark') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  });
+
   const [view, setView] = useState<'hub' | 'studio'>('hub');
   const [studioTab, setStudioTab] = useState<'master' | 'advanced'>('master');
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
   const isSavingRef = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('studio-theme', theme);
+    document.documentElement.className = theme;
+  }, [theme]);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -82,6 +102,8 @@ function App() {
   const [musicPath, setMusicPath] = useState<string | null>(null);
   const [showPathReview, setShowPathReview] = useState(false);
   const [savedFilePath, setSavedFilePath] = useState<string | null>(null);
+  const [relinkTrack, setRelinkTrack] = useState<Track | null>(null);
+  const [exportProgress, setExportProgress] = useState(0);
 
   const activeTrack = tracks.find(t => t.id === activeTrackId) || null;
 
@@ -98,6 +120,7 @@ function App() {
     activeTrack?.buffer || null,
     activeTrack?.speed || 1.0,
     activeTrack?.reverbWet || 0,
+    activeTrack?.roomSize || 0.5,
     activeTrack?.eq || { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 },
     activeTrack?.attenuation || 1.0,
     activeTrack?.limiter || false,
@@ -131,13 +154,35 @@ function App() {
       if (track.isReady || track.buffer || track.hasError || track.needsRelink || track.file.size === 0) return;
       try {
         const arrayBuffer = await track.file.arrayBuffer();
-        const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        let decodedBuffer: AudioBuffer;
+
+        try {
+          // Attempt native browser decoding (MP3, WAV, AAC, etc)
+          decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        } catch (err) {
+          // NATIVE FALLBACK: Use FFmpeg for MKV, HEVC, AC3, etc.
+          // Note: track.file.path is only available in Electron
+          const filePath = (track.file as any).path;
+          if (window.electronAPI && filePath) {
+            console.log('[SYSTEM] Browser decoding failed. Attempting Native FFmpeg extraction for:', filePath);
+            const nativeBuffer = await window.electronAPI.extractAudio(filePath);
+            if (nativeBuffer) {
+              decodedBuffer = await audioCtx.decodeAudioData(nativeBuffer);
+            } else {
+              throw new Error('Native extraction failed to produce a valid buffer.');
+            }
+          } else {
+            throw err;
+          }
+        }
+
         setTracks(prev => prev.map(t =>
           t.id === track.id ? { ...t, buffer: decodedBuffer, isReady: true, hasError: false } : t
         ));
-      } catch (e: any) {
+      } catch (err: any) {
+        console.error('Mastering Initialization Error:', err);
         setTracks(prev => prev.map(t =>
-          t.id === track.id ? { ...t, hasError: true, errorMsg: e.message } : t
+          t.id === track.id ? { ...t, hasError: true, errorMsg: 'Format Unplayable' } : t
         ));
       }
     });
@@ -158,12 +203,16 @@ function App() {
             settings: {
               speed: activeTrack.speed,
               reverbWet: activeTrack.reverbWet,
+              roomSize: activeTrack.roomSize,
               eq: activeTrack.eq,
               attenuation: activeTrack.attenuation,
               limiter: activeTrack.limiter
             },
             detectedBpm: activeTrack.detectedBpm,
-            detectedGenre: activeTrack.detectedGenre
+            detectedGenre: activeTrack.detectedGenre,
+            sourceUrl: activeTrack.sourceUrl || undefined,
+            archivedAt: activeTrack.archivedAt || undefined,
+            mediaType: activeTrack.videoPath ? 'video' : 'audio'
           };
           const id = await db.projects.put(projectData);
           if (!currentProjectId) setCurrentProjectId(id as number);
@@ -179,21 +228,26 @@ function App() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      const newTracks: Track[] = newFiles.map(file => ({
-        id: Math.random().toString(36).substring(2, 9),
-        file,
-        buffer: null,
-        speed: 1.0,
-        reverbWet: 0.0,
-        nightcore: false,
-        isReady: false,
-        eq: { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 },
-        attenuation: 1.0,
-        limiter: false,
-        punch: 0,
-        tail: 0,
-        isElastic: false
-      }));
+      const newTracks: Track[] = newFiles.map(file => {
+        const isVideo = file.type.startsWith('video/') || /\.(mp4|mkv|mov|webm)$/i.test(file.name);
+        return {
+          id: Math.random().toString(36).substring(2, 9),
+          file,
+          buffer: null,
+          speed: 1.0,
+          reverbWet: 0.0,
+          nightcore: false,
+          isReady: false,
+          eq: { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 },
+          attenuation: 1.0,
+          limiter: false,
+          roomSize: 0.5,
+          punch: 0,
+          tail: 0,
+          isElastic: false,
+          videoPath: isVideo ? (file as any).path : undefined
+        };
+      });
       setTracks(prev => [...prev, ...newTracks]);
       if (!activeTrackId) setActiveTrackId(newTracks[0].id);
       setView('studio');
@@ -251,6 +305,7 @@ function App() {
       eq: project.settings.eq,
       attenuation: project.settings.attenuation,
       limiter: project.settings.limiter,
+      roomSize: (project.settings as any).roomSize || 0.5,
       punch: (project.settings as any).punch || 0,
       tail: (project.settings as any).tail || 0,
       isElastic: (project.settings as any).isElastic || false,
@@ -303,32 +358,58 @@ function App() {
   const handleExport = async () => {
     if (!activeTrack || !activeTrack.buffer) return;
     setIsPlaying(false);
+    
+    // START STUDIO EXPORT
+    setShowExport(true);
+    setExportProgress(5);
+
+    // Simulate algorithmic render progress (since OfflineAudioContext doesn't emit progress)
+    const renderTimer = setInterval(() => {
+      setExportProgress(prev => prev < 70 ? prev + Math.random() * 8 : prev);
+    }, 200);
+
     const resultBuffer = await renderBuffer(activeTrack.buffer, {
       speed: activeTrack.speed,
       reverb: activeTrack.reverbWet,
+      roomSize: activeTrack.roomSize,
       eq: activeTrack.eq,
       attenuation: activeTrack.attenuation,
       limiter: activeTrack.limiter
     });
+
+    clearInterval(renderTimer);
+    setExportProgress(75);
+
     if (resultBuffer) {
       const blob = await exportAudio(resultBuffer, exportFormat, exportKbps, activeTrack.file.name);
       if (window.electronAPI && blob) {
         const arrayBuffer = await blob.arrayBuffer();
         const extension = exportFormat === 'mp3' ? '.mp3' : '.wav';
         const fileName = activeTrack.file.name.replace(/\.[^/.]+$/, "") + "_mastered" + extension;
-        console.log("[App] Requesting save for:", fileName);
         const savedPath = await window.electronAPI.saveFile(fileName, arrayBuffer);
-        console.log("[App] Save result:", savedPath);
         
         if (savedPath) {
           setSavedFilePath(savedPath);
-          setShowExport(false);
         }
-        // If savedPath is null, user canceled, stay on export modal or just stay in studio
-      } else {
-        setShowExport(false);
       }
     }
+  };
+
+  const handleRelink = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = "audio/*,video/*";
+    input.onchange = async (e: any) => {
+      if (e.target.files?.[0] && relinkTrack) {
+        const file = e.target.files[0];
+        const internalPath = await window.electronAPI.cacheAudioFile(file.path, file.name);
+        if (internalPath) {
+          setTracks(prev => prev.map(t => t.id === relinkTrack.id ? { ...t, file, internalPath, needsRelink: false } : t));
+          setRelinkTrack(null);
+        }
+      }
+    };
+    input.click();
   };
 
   return (
@@ -415,19 +496,44 @@ function App() {
                 ) : (
                   <div className="flex-1 flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-500">
                     <div className="flex flex-col gap-4 relative">
-                      <StudioVisualizer analyser={analyser} eq={activeTrack.eq} audioCtx={audioCtx} />
+                      {activeTrack?.needsRelink && (
+                        <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-md rounded-[32px] flex flex-col items-center justify-center gap-4 text-center p-8 animate-in fade-in duration-500 border border-red-500/20">
+                          <AlertCircle className="w-12 h-12 text-red-500 mb-2" />
+                          <h3 className="text-xl font-black uppercase tracking-tighter">Archival Sync Lost</h3>
+                          <p className="text-[10px] opacity-60 max-w-[240px]">The source file for this session is missing from the local studio vault.</p>
+                          <button onClick={() => setRelinkTrack(activeTrack)} className="px-6 py-2 bg-red-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-colors">Relink Source</button>
+                        </div>
+                      )}
+                      {activeTrack?.videoPath ? (
+                        <VideoPlayer 
+                          src={`media://${activeTrack.videoPath}`}
+                          currentTime={currentTime}
+                          isPlaying={isPlaying}
+                        />
+                      ) : (
+                        <StudioVisualizer analyser={analyser} eq={activeTrack?.eq || { sub: 0, bass: 0, mid: 0, treble: 0, air: 0 }} audioCtx={audioCtx} />
+                      )}
+                      
                       <div className="flex items-center justify-between px-4">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-6">
+                          {/* THEME TOGGLE */}
+                          <button
+                            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 group"
+                            title={theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+                          >
+                            {theme === 'light' ? <Moon className="w-5 h-5 opacity-40 group-hover:opacity-100" /> : <Sun className="w-5 h-5 opacity-40 group-hover:opacity-100" />}
+                          </button>
                           <p className="text-xl font-black tracking-tighter truncate max-w-md">{activeTrack?.file.name}</p>
                           <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
                         </div>
                         <div className="flex gap-4">
-                          {activeTrack.detectedBpm && (
+                          {activeTrack?.detectedBpm && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] rounded-2xl text-[10px] font-black uppercase">
                               <Activity className="w-3 h-3" /> {activeTrack.detectedBpm} BPM
                             </div>
                           )}
-                          {activeTrack.detectedGenre && (
+                          {activeTrack?.detectedGenre && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-[var(--color-surface-variant)] rounded-2xl text-[10px] font-black uppercase opacity-60">
                               <Music className="w-3 h-3" /> {activeTrack.detectedGenre}
                             </div>
@@ -438,7 +544,7 @@ function App() {
 
                     <div className="flex flex-col xl:flex-row gap-8 flex-1">
                       <div className="flex-1 flex flex-col gap-6">
-                        {activeTrack.needsRelink ? (
+                        {activeTrack?.needsRelink ? (
                           <div className="my-card flex-1 flex flex-col items-center justify-center p-12 text-center bg-[var(--color-surface-variant)] border-2 border-dashed border-red-500/20">
                             <AlertTriangle className="w-16 h-16 text-red-500 mb-4 opacity-40" />
                             <h2 className="text-2xl font-black uppercase tracking-tighter">Session File Missing</h2>
@@ -450,7 +556,7 @@ function App() {
                           </div>
                         ) : (
                           <div className="my-card bg-[var(--color-surface)] shadow-lg p-6">
-                            <Waveform buffer={activeTrack.buffer || null} currentTime={currentTime} duration={duration} onSeek={seekTo} />
+                            <Waveform buffer={activeTrack?.buffer || null} currentTime={currentTime} duration={duration} onSeek={seekTo} />
                           </div>
                         )}
                         <div className="flex gap-4">
@@ -475,7 +581,7 @@ function App() {
                               <div className="flex items-center justify-between">
                                 <h2 className="text-sm font-black uppercase tracking-widest opacity-40 flex items-center gap-2"><Settings2 className="w-4 h-4" /> Mastering Suite</h2>
                                 <div className="flex gap-2">
-                                  <button onClick={() => activeTrack.suggestedEQ && updateActiveTrack({ eq: activeTrack.suggestedEQ })} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] hover:scale-105 transition-all">
+                                  <button onClick={() => activeTrack?.suggestedEQ && updateActiveTrack({ eq: activeTrack.suggestedEQ })} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--color-secondary-container)] text-[var(--color-on-secondary-container)] hover:scale-105 transition-all">
                                     <Activity className="w-4 h-4" /> <span className="text-[10px] font-black uppercase">Auto-Level</span>
                                   </button>
                                   <button onClick={() => updateActiveTrack({ limiter: !activeTrack?.limiter })} className={cn("flex items-center gap-2 px-3 py-2 rounded-xl transition-all", activeTrack?.limiter ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "bg-[var(--color-surface)] opacity-40")}>
@@ -502,13 +608,26 @@ function App() {
                                 ))}
                               </div>
                               <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <p className="text-[10px] font-black uppercase opacity-40 ml-1">Volume</p>
-                                  <input type="range" min="0" max="1.5" step="0.05" value={activeTrack?.attenuation || 1.0} onChange={(e) => updateActiveTrack({ attenuation: parseFloat(e.target.value) })} className="my-slider-track" />
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-[10px] font-black uppercase opacity-40 ml-1">Spacing</p>
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                    <span className="opacity-40">Wetness</span>
+                                    <span className="text-[var(--color-primary)]">{Math.round(activeTrack.reverbWet * 100)}%</span>
+                                  </div>
                                   <input type="range" min="0" max="1" step="0.01" value={activeTrack?.reverbWet || 0} onChange={(e) => updateActiveTrack({ reverbWet: parseFloat(e.target.value) })} className="my-slider-track" />
+                                </div>
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                    <span className="opacity-40">Room Size</span>
+                                    <span className="text-[var(--color-primary)]">{Math.round(activeTrack.roomSize * 100)}%</span>
+                                  </div>
+                                  <input type="range" min="0.1" max="1" step="0.01" value={activeTrack?.roomSize || 0.5} onChange={(e) => updateActiveTrack({ roomSize: parseFloat(e.target.value) })} className="my-slider-track" />
+                                </div>
+                                <div className="col-span-2 space-y-4 pt-2">
+                                  <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                    <span className="opacity-40">Master Gain</span>
+                                    <span className="text-[var(--color-primary)]">{(activeTrack.attenuation * 100).toFixed(0)}%</span>
+                                  </div>
+                                  <input type="range" min="0" max="1.5" step="0.05" value={activeTrack?.attenuation || 1.0} onChange={(e) => updateActiveTrack({ attenuation: parseFloat(e.target.value) })} className="my-slider-track" />
                                 </div>
                               </div>
                             </>
@@ -539,7 +658,7 @@ function App() {
                                   </div>
                                 </div>
                                 <div className="p-6 bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] rounded-[32px] border border-white/10">
-                                  <p className="text-[10px] opacity-60 leading-relaxed font-bold">{activeTrack.isElastic ? "Elastic: Phase Vocoder enabled. Preserves pitch." : "Generic: Time domain stretching. Pitch drifts with speed."}</p>
+                                  <p className="text-[10px] opacity-60 leading-relaxed font-bold">{activeTrack?.isElastic ? "Elastic: Phase Vocoder enabled. Preserves pitch." : "Generic: Time domain stretching. Pitch drifts with speed."}</p>
                                 </div>
                               </div>
                             </div>
@@ -559,12 +678,15 @@ function App() {
                     <h2 className="text-3xl font-black tracking-tighter uppercase">Studio Export</h2>
                     {!isExporting && <button onClick={() => setShowExport(false)} className="p-3 -mr-3 rounded-full hover:bg-[var(--color-surface-variant)]"><X className="w-6 h-6" /></button>}
                   </div>
-                  {isExporting ? (
-                    <div className="flex flex-col items-center justify-center py-12 gap-8">
-                      <div className="relative"><Loader2 className="w-24 h-24 animate-spin text-[var(--color-primary)]" /><div className="absolute inset-0 flex items-center justify-center font-black text-sm">{progress}%</div></div>
-                      <div className="text-center truncate w-full"><p className="text-2xl font-black uppercase tracking-widest truncate px-4">{activeTrack?.file.name}</p></div>
-                    </div>
-                  ) : (
+                      {isExporting ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-8">
+                          <div className="relative">
+                            <Loader2 className="w-24 h-24 animate-spin text-[var(--color-primary)]" />
+                            <div className="absolute inset-0 flex items-center justify-center font-black text-sm">{Math.max(exportProgress, progress)}%</div>
+                          </div>
+                          <div className="text-center truncate w-full"><p className="text-2xl font-black uppercase tracking-widest truncate px-4">{activeTrack?.file.name}</p></div>
+                        </div>
+                      ) : (
                     <div className="flex flex-col gap-8">
                       <div className="flex gap-2 p-2 bg-[var(--color-surface)] rounded-[24px]">
                         {['mp3', 'wav'].map(f => <button key={f} className={cn("flex-1 py-3 px-4 rounded-[18px] font-black uppercase text-xs", exportFormat === f ? "my-button-primary" : "opacity-40")} onClick={() => setExportFormat(f as any)}>{f}</button>)}
@@ -579,12 +701,14 @@ function App() {
         )}
       </AnimatePresence>
 
-      <DesktopModals showPathReview={showPathReview} setShowPathReview={setShowPathReview} musicPath={musicPath} savedFilePath={savedFilePath} setSavedFilePath={setSavedFilePath} />
+      <DesktopModals relinkTrack={relinkTrack} onRelink={handleRelink} onCancelRelink={() => setRelinkTrack(null)} showPathReview={showPathReview} setShowPathReview={setShowPathReview} musicPath={musicPath} savedFilePath={savedFilePath} setSavedFilePath={setSavedFilePath} />
+      {/* SYSTEM BACKGROUND EFFECT */}
+      <FluidBackground />
     </div>
   );
 }
 
-function DesktopModals({ showPathReview, setShowPathReview, musicPath, savedFilePath, setSavedFilePath }: any) {
+function DesktopModals({ relinkTrack, onRelink, onCancelRelink, showPathReview, setShowPathReview, musicPath, savedFilePath, setSavedFilePath }: any) {
   return (
     <>
       {showPathReview && !savedFilePath && (
@@ -611,6 +735,39 @@ function DesktopModals({ showPathReview, setShowPathReview, musicPath, savedFile
           </div>
         </div>
       )}
+
+      {/* ARCHIVAL RELINK SYSTEM */}
+      <AnimatePresence>
+        {relinkTrack && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xl animate-in fade-in duration-500">
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="my-card w-full max-w-md flex flex-col items-center gap-8 border border-red-500/20 p-10 text-center shadow-[0_0_100px_rgba(239,68,68,0.1)]">
+              <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                <AlertCircle className="w-10 h-10 text-red-500" />
+              </div>
+              <div className="space-y-3">
+                <h2 className="text-3xl font-black tracking-tighter uppercase red-glow-text">Source Missing</h2>
+                <p className="text-xs opacity-60 font-medium">The archived file for <span className="text-white">"{relinkTrack.file.name}"</span> was moved or deleted externally. Studio persistence is compromised.</p>
+              </div>
+              
+              <div className="w-full space-y-3">
+                <button onClick={onRelink} className="my-button my-button-primary w-full py-5 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3">
+                  <FolderSearch className="w-5 h-5" /> RE-LINK ARCHIVE
+                </button>
+                <button onClick={onCancelRelink} className="w-full py-3 text-[10px] font-black uppercase opacity-40 hover:opacity-100 transition-all">Dismiss Warning</button>
+              </div>
+              
+              {relinkTrack.sourceUrl && (
+                <div className="pt-4 border-t border-white/5 w-full">
+                  <p className="text-[9px] font-black uppercase opacity-30 mb-2">Original Studio Origin</p>
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/5 truncate text-[9px] font-mono opacity-60">
+                    {relinkTrack.sourceUrl}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

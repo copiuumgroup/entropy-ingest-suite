@@ -1,6 +1,4 @@
-# Dynamic Media Manipulation Brainstorming Guide
-
-This document outlines the technical strategy for building a high-end, locally-running audio manipulation tool suite. It is designed to be readable for humans while providing the necessary logical framework for an AI to implement the features.
+This document outlines the technical strategy for building a high-end, locally-running audio manipulation tool suite. It is designed to be readable for humans while providing the necessary logical framework for the **copiuum group** to implement the features.
 
 ## 1. Likelihood of Success
 **Status: Extremely High**

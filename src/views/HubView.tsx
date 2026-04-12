@@ -31,11 +31,32 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
   const [logs, setLogs] = useState<string[]>([]);
   const [consoleFontSize, setConsoleFontSize] = useState(13);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [ingestMode, setIngestMode] = useState<'audio' | 'video'>('audio');
   const [ingestQuality, setIngestQuality] = useState<'mp3' | 'wav'>('mp3');
+  const [systemLink, setSystemLink] = useState<{ ytdlp: boolean, ffmpeg: boolean, dotnet: boolean }>({ ytdlp: false, ffmpeg: false, dotnet: false });
+  const [engineMetrics, setEngineMetrics] = useState<{ electron: string, chrome: string, node: string, v8: string } | null>(null);
+  const [isArchivesVisible, setIsArchivesVisible] = useState(true);
   const logEndRef = React.useRef<HTMLDivElement>(null);
   const isCancelledRef = React.useRef(false);
 
   React.useEffect(() => {
+    const checkLink = async () => {
+      if (window.electronAPI) {
+        const status = await window.electronAPI.checkSystemBinary();
+        const metrics = await window.electronAPI.getEngineMetrics();
+        setSystemLink(status);
+        setEngineMetrics(metrics);
+        
+        if (!status.ytdlp || !status.ffmpeg) {
+          setLogs(prev => [...prev, `[SYSTEM] WARNING: Incomplete System Link. YT-DLP: ${status.ytdlp ? 'OK' : 'MISSING'}, FFMPEG: ${status.ffmpeg ? 'OK' : 'MISSING'}`]);
+        }
+        if (status.dotnet) {
+          setLogs(prev => [...prev, "[SYSTEM] Modern Environment detected: .NET Runtimes verified."]);
+        }
+      }
+    };
+    checkLink();
+
     if (window.electronAPI) {
       const cleanup = window.electronAPI.onYtdlpLog((data) => {
         setLogs(prev => [...prev.slice(-50), data]); 
@@ -100,6 +121,15 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
 
   const handleClearFinished = () => setQueue(prev => prev.filter(q => q.status !== 'success'));
   const handleOpenFolder = () => window.electronAPI?.openMusicFolder();
+  const handlePurgeVault = async () => {
+    if (confirm("DANGER: This will permanently delete all internalized archives in the Studio Vault. Are you sure?")) {
+      const success = await window.electronAPI?.purgeArchives();
+      if (success) {
+        setLogs(prev => [...prev, "[SYSTEM] Studio Vault purged successfully."]);
+        playSound('warning');
+      }
+    }
+  };
 
   const handleCancel = async () => {
     isCancelledRef.current = true;
@@ -128,10 +158,18 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
           throw new Error('System Link Offline: Native Bridge Not Found');
         }
 
-        const res = await window.electronAPI.ytdlpDownload(item.url, { quality: ingestQuality });
+        const res = await window.electronAPI.ytdlpDownload(item.url, { 
+          quality: ingestQuality,
+          mode: ingestMode
+        });
         if (!res.success) throw new Error(res.error);
 
-        setQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'success' } : q));
+        setQueue(prev => prev.map(q => q.id === item.id ? { 
+          ...q, 
+          status: 'success',
+          sourceUrl: item.url,
+          archivedAt: Date.now()
+        } : q));
       } catch (e: any) {
         if (isCancelledRef.current) {
           setLogs(prev => [...prev, `Process Interrupted: ${item.url}`]);
@@ -181,10 +219,19 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3 px-3 py-1 bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] rounded-full w-fit">
             <Activity className="w-3 h-3" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-on-primary-container)]">Mastering Suite v2.0 - YT-DLP Engaged</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-on-primary-container)]">Creative Suite v2.0 - Engine Engaged</span>
           </div>
-          <h1 className="text-7xl font-black tracking-tighter uppercase leading-[0.8] text-[var(--color-on-surface)]">
-            Studio<br /><span className="text-[var(--color-primary)] opacity-40 italic">Archives</span>
+          <h1 
+            onClick={() => setIsArchivesVisible(!isArchivesVisible)}
+            className="text-7xl font-black tracking-tighter uppercase leading-[0.8] text-[var(--color-on-surface)] cursor-pointer group flex items-center gap-4 select-none"
+          >
+            Material<br /><span className="text-[var(--color-primary)] opacity-40 italic">Studio</span>
+            <motion.div
+              animate={{ rotate: isArchivesVisible ? 0 : 180, scale: isArchivesVisible ? 1 : 1.2 }}
+              className="opacity-0 group-hover:opacity-20 transition-opacity mt-4"
+            >
+              <ArrowRight className="w-12 h-12" />
+            </motion.div>
           </h1>
         </div>
 
@@ -197,7 +244,10 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
       <div className="grid grid-cols-12 gap-10 flex-1 min-h-0">
 
         {/* LEFT PANEL */}
-        <div className="col-span-12 lg:col-span-5 flex flex-col gap-6 min-h-0 h-full">
+        <div className={cn(
+          "flex flex-col gap-6 min-h-0 h-full transition-all duration-700 ease-[0.2,0.8,0.2,1]",
+          isArchivesVisible ? "col-span-12 lg:col-span-5" : "col-span-12 lg:col-span-12"
+        )}>
           <AnimatePresence mode="wait">
             {activeTab === 'local' ? (
               <motion.label
@@ -207,7 +257,7 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
                 exit={{ opacity: 0, x: 20 }}
                 className="group relative w-full flex-1 my-card bg-[var(--color-surface-variant)] flex flex-col items-center justify-center gap-8 cursor-pointer hover:border-[var(--color-primary)] transition-all duration-700 overflow-hidden shadow-2xl min-h-[400px]"
               >
-                <input type="file" accept="audio/*" multiple className="hidden" onChange={onUpload} />
+                <input type="file" accept="audio/*,video/*,.mkv,.mov,.mp4,.webm" multiple className="hidden" onChange={onUpload} />
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[var(--color-primary)] opacity-[0.03] blur-[100px] group-hover:opacity-[0.1] transition-opacity duration-1000" />
                 <motion.div whileHover={{ scale: 1.05, rotate: -3 }} className="w-28 h-28 rounded-[24px] bg-[var(--color-primary)] text-[var(--color-on-primary)] flex items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.3)] relative z-10">
                   <UploadCloud className="w-12 h-12" />
@@ -228,15 +278,33 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
                 <div className="my-card bg-[var(--color-surface-variant)] p-8 flex flex-col gap-6 flex-1 min-h-0">
                   <div className="flex items-center justify-between text-[var(--color-primary)]">
                     <div className="flex items-center gap-4">
-                      <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+                      <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 items-center gap-3">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full ml-2",
+                          systemLink.ytdlp && systemLink.ffmpeg ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-red-500 animate-pulse"
+                        )} />
+                        <span className="text-[9px] font-black uppercase tracking-widest opacity-40 mr-2">Link</span>
+                        {systemLink.dotnet && <span className="text-[7px] font-black uppercase tracking-tighter bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded border border-green-500/20 mr-2 shadow-[0_0_8px_rgba(34,197,94,0.2)]">NET 10+ Ready</span>}
+                        <div className="w-[1px] h-3 bg-white/10" />
+                        <button 
+                          onClick={() => setIngestMode('audio')} 
+                          disabled={isProcessing}
+                          className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", ingestMode === 'audio' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
+                        >Audio</button>
+                        <button 
+                          onClick={() => setIngestMode('video')} 
+                          disabled={isProcessing}
+                          className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", ingestMode === 'video' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
+                        >Video</button>
+                        <div className="w-[1px] h-3 bg-white/10" />
                         <button 
                           onClick={() => setIngestQuality('mp3')} 
-                          disabled={isProcessing}
+                          disabled={isProcessing || ingestMode === 'video'}
                           className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", ingestQuality === 'mp3' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
                         >MP3</button>
                         <button 
                           onClick={() => setIngestQuality('wav')} 
-                          disabled={isProcessing}
+                          disabled={isProcessing  || ingestMode === 'video'}
                           className={cn("px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", ingestQuality === 'wav' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
                         >WAV</button>
                       </div>
@@ -300,6 +368,32 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
                       )}
                       <div ref={logEndRef} />
                     </div>
+
+                    {/* SYSTEM INTELLIGENCE FOOTER */}
+                    {engineMetrics && (
+                      <div className="flex items-center gap-6 px-4 py-3 bg-white/5 border-t border-white/5 opacity-40 hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--color-primary)]">CORE</span>
+                          <span className="text-[8px] font-bold opacity-60">Electron v{engineMetrics.electron}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--color-primary)]">CHROME</span>
+                          <span className="text-[8px] font-bold opacity-60">v{engineMetrics.chrome}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-[var(--color-primary)]">RUNTIME</span>
+                          <span className="text-[8px] font-bold opacity-60">Node {engineMetrics.node} (V8 {engineMetrics.v8})</span>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2">
+                          <span className={cn(
+                            "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded",
+                            systemLink.dotnet ? "bg-green-500/10 text-green-500" : "bg-white/5 opacity-40"
+                          )}>
+                            {systemLink.dotnet ? "ULTRA SECURE ENVIRONMENT" : "GENERIC STANDARDS"}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-4">
@@ -323,127 +417,147 @@ const HubView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }) 
         </div>
 
         {/* RIGHT PANEL */}
-        <div className="col-span-12 lg:col-span-7 flex flex-col gap-6 min-h-0">
-          <div className="flex items-center gap-4 px-2">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 text-[var(--on-surface)]">
-              {activeTab === 'local' ? 'Recent Archives' : 'Production Queue'}
-            </h2>
-            {activeTab === 'cloud' && queue.some(q => q.status === 'success') && (
-              <button 
-                onClick={handleClearFinished}
-                className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all opacity-40 hover:opacity-100 border border-white/5"
-              >
-                Clear Finished
-              </button>
-            )}
-            <div className="flex-1 h-[1px] bg-[var(--color-outline)] opacity-10" />
-          </div>
+        <AnimatePresence>
+          {isArchivesVisible && (
+            <motion.div 
+              initial={{ opacity: 0, x: 50, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.95 }}
+              transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1] }}
+              className="col-span-12 lg:col-span-7 flex flex-col gap-6 min-h-0"
+            >
+              <div className="flex items-center gap-4 px-2">
+                <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 text-[var(--on-surface)]">
+                  {activeTab === 'local' ? 'Recent Archives' : 'Production Queue'}
+                </h2>
+                {activeTab === 'local' && (
+                  <button 
+                    onClick={handlePurgeVault}
+                    disabled={isProcessing}
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all opacity-40 hover:opacity-100 disabled:hidden"
+                  >
+                    Purge Vault
+                  </button>
+                )}
+                {activeTab === 'cloud' && queue.some(q => q.status === 'success') && (
+                  <button 
+                    onClick={handleClearFinished}
+                    disabled={isProcessing}
+                    className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all opacity-40 hover:opacity-100 border border-white/5 disabled:hidden"
+                  >
+                    Clear Finished
+                  </button>
+                )}
+                <div className="flex-1 h-[1px] bg-[var(--color-outline)] opacity-10" />
+              </div>
 
-          <div className="flex-1 my-card bg-[var(--color-surface-variant)] p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
-            {activeTab === 'local' ? (
-              <>
-                {recentProjects && recentProjects.length > 0 ? (
-                  <AnimatePresence>
-                    {recentProjects.map((project: ProjectMetadata, idx: number) => (
+              <div className="flex-1 my-card bg-[var(--color-surface-variant)] p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+                {activeTab === 'local' ? (
+                  <>
+                    {recentProjects && recentProjects.length > 0 ? (
+                      <AnimatePresence>
+                        {recentProjects.map((project: ProjectMetadata, idx: number) => (
+                          <motion.div
+                            key={project.id}
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.1, ease: [0.2, 0.8, 0.2, 1] }}
+                            onClick={() => onOpenProject(project)}
+                            className={cn(
+                              "group relative p-6 bg-[var(--color-surface)] rounded-3xl flex items-center gap-6 cursor-pointer overflow-hidden border border-white/5 hover:bg-[var(--color-primary)] transition-all",
+                              idx % 3 === 0 ? "md:col-span-2" : ""
+                            )}
+                          >
+                            <div className="w-16 h-16 rounded-[16px] overflow-hidden shadow-2xl relative bg-black/20">
+                              {project.coverArt ? (
+                                <img src={project.coverArt} className="w-full h-full object-cover" alt="" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-800 to-black">
+                                  <Music className="w-6 h-6 text-white/40" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xl font-black uppercase tracking-tighter truncate group-hover:text-[var(--color-on-primary)]">{project.name}</p>
+                              <p className="text-[10px] font-bold opacity-30 group-hover:text-[var(--color-on-primary)] group-hover:opacity-60">{new Date(project.lastModified).toLocaleDateString()}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onDeleteProject && project.id) onDeleteProject(project.id);
+                                }}
+                                className="p-3 rounded-2xl bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </button>
+                              <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-4 transition-all" />
+                            </div>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-20 text-[var(--color-on-surface)]">
+                        <Plus className="w-12 h-12 mb-4" />
+                        <p className="text-sm font-black uppercase tracking-[0.2em]">No Recent Projects</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {queue.length === 0 && (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-20 text-[var(--color-on-surface)]">
+                        <CloudDownload className="w-12 h-12 mb-4" />
+                        <p className="text-sm font-black uppercase tracking-[0.2em]">Queue is Empty</p>
+                      </div>
+                    )}
+                    {queue.map((item) => (
                       <motion.div
-                        key={project.id}
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.1, ease: [0.2, 0.8, 0.2, 1] }}
-                        onClick={() => onOpenProject(project)}
+                        key={item.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
                         className={cn(
-                          "group relative p-6 bg-[var(--color-surface)] rounded-3xl flex items-center gap-6 cursor-pointer overflow-hidden border border-white/5 hover:bg-[var(--color-primary)] transition-all",
-                          idx % 3 === 0 ? "md:col-span-2" : ""
+                          "p-5 rounded-[24px] flex items-center gap-5 border transition-all duration-500",
+                          item.status === 'idle' && "bg-white/[0.03] border-white/5",
+                          item.status === 'processing' && "bg-[var(--color-primary-container)] border-[var(--color-primary)] animate-pulse",
+                          item.status === 'success' && "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl scale-[1.02]",
+                          item.status === 'error' && "bg-red-500/10 border-red-500"
                         )}
                       >
-                        <div className="w-16 h-16 rounded-[16px] overflow-hidden shadow-2xl relative bg-black/20">
-                          {project.coverArt ? (
-                            <img src={project.coverArt} className="w-full h-full object-cover" alt="" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-800 to-black">
-                              <Music className="w-6 h-6 text-white/40" />
-                            </div>
-                          )}
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg",
+                          item.status === 'idle' && "bg-white/5",
+                          item.status === 'processing' && "bg-[var(--color-primary)]",
+                          item.status === 'success' && "bg-[var(--color-on-primary)]",
+                          item.status === 'error' && "bg-red-500"
+                        )}>
+                          {item.status === 'idle' && <Music className="w-5 h-5 opacity-20" />}
+                          {item.status === 'processing' && <Loader2 className="w-5 h-5 animate-spin text-[var(--color-on-primary)]" />}
+                          {item.status === 'success' && <CheckCircle2 className="w-5 h-5 text-[var(--color-primary)]" />}
+                          {item.status === 'error' && <AlertTriangle className="w-5 h-5 text-white" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xl font-black uppercase tracking-tighter truncate group-hover:text-[var(--color-on-primary)]">{project.name}</p>
-                          <p className="text-[10px] font-bold opacity-30 group-hover:text-[var(--color-on-primary)] group-hover:opacity-60">{new Date(project.lastModified).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onDeleteProject && project.id) onDeleteProject(project.id);
-                            }}
-                            className="p-3 rounded-2xl bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white transition-all"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                          <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-4 transition-all" />
+                          <p className={cn(
+                            "text-[11px] font-black uppercase tracking-tight truncate",
+                            item.status === 'success' ? "text-[var(--color-on-primary)]" : "text-[var(--color-on-surface)]"
+                          )}>{item.url}</p>
+                          {item.error ? (
+                            <p className="text-[9px] text-red-500 font-bold uppercase truncate mt-1">{item.error}</p>
+                          ) : (
+                            <p className={cn(
+                              "text-[8px] font-black uppercase opacity-40 mt-1",
+                              item.status === 'success' ? "text-[var(--color-on-primary)]" : ""
+                            )}>{item.status}</p>
+                          )}
                         </div>
                       </motion.div>
                     ))}
-                  </AnimatePresence>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-20 text-[var(--color-on-surface)]">
-                    <Plus className="w-12 h-12 mb-4" />
-                    <p className="text-sm font-black uppercase tracking-[0.2em]">No Recent Projects</p>
                   </div>
                 )}
-              </>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {queue.length === 0 && (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-20 text-[var(--color-on-surface)]">
-                    <CloudDownload className="w-12 h-12 mb-4" />
-                    <p className="text-sm font-black uppercase tracking-[0.2em]">Queue is Empty</p>
-                  </div>
-                )}
-                 {queue.map((item) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className={cn(
-                      "p-5 rounded-[24px] flex items-center gap-5 border transition-all duration-500",
-                      item.status === 'idle' && "bg-white/[0.03] border-white/5",
-                      item.status === 'processing' && "bg-[var(--color-primary-container)] border-[var(--color-primary)] animate-pulse",
-                      item.status === 'success' && "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl scale-[1.02]",
-                      item.status === 'error' && "bg-red-500/10 border-red-500"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg",
-                      item.status === 'idle' && "bg-white/5",
-                      item.status === 'processing' && "bg-[var(--color-primary)]",
-                      item.status === 'success' && "bg-[var(--color-on-primary)]",
-                      item.status === 'error' && "bg-red-500"
-                    )}>
-                      {item.status === 'idle' && <Music className="w-5 h-5 opacity-20" />}
-                      {item.status === 'processing' && <Loader2 className="w-5 h-5 animate-spin text-[var(--color-on-primary)]" />}
-                      {item.status === 'success' && <CheckCircle2 className="w-5 h-5 text-[var(--color-primary)]" />}
-                      {item.status === 'error' && <AlertTriangle className="w-5 h-5 text-white" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn(
-                        "text-[11px] font-black uppercase tracking-tight truncate",
-                        item.status === 'success' ? "text-[var(--color-on-primary)]" : "text-[var(--color-on-surface)]"
-                      )}>{item.url}</p>
-                      {item.error ? (
-                        <p className="text-[9px] text-red-500 font-bold uppercase truncate mt-1">{item.error}</p>
-                      ) : (
-                        <p className={cn(
-                          "text-[8px] font-black uppercase opacity-40 mt-1",
-                          item.status === 'success' ? "text-[var(--color-on-primary)]" : ""
-                        )}>{item.status}</p>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
               </div>
-            )}
-          </div>
-        </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
     </motion.div>

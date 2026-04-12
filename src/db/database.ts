@@ -20,9 +20,13 @@ export interface ProjectMetadata {
     };
     attenuation: number;
     limiter: boolean;
+    roomSize: number;
   };
   detectedBpm?: number;
   detectedGenre?: string;
+  sourceUrl?: string;
+  archivedAt?: number;
+  mediaType?: 'audio' | 'video';
 }
 
 export class StudioDatabase extends Dexie {
@@ -30,8 +34,8 @@ export class StudioDatabase extends Dexie {
 
   constructor() {
     super('StudioDatabase');
-    this.version(1).stores({
-      projects: '++id, name, lastModified'
+    this.version(2).stores({
+      projects: '++id, name, lastModified, sourceUrl'
     });
   }
 }

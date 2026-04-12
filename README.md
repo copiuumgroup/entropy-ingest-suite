@@ -1,13 +1,12 @@
-# Material Audio Studio 🎧💎
+# 💎 Material Studio
+**The Definitive Native-First Audio Mastering Suite by copiuum group.**
 
-> **Professional High-Fidelity DSP Mastering Suite optimized for modern Windows LTSC releases.**
-
-Material Audio Studio is a premium, local-first audio tool designed for modern Windows environments. It provides high-performance Digital Signal Processing (DSP) for creating "Slowed + Reverb" and "Nightcore" versions of tracks with professional-grade EQ, stabilization, and a robust ingestion engine.
+Material Studio is a premium, local-first audio tool designed for modern Windows environments. It provides high-performance Digital Signal Processing (DSP) for creating "Slowed + Reverb" and "Nightcore" versions of tracks with professional-grade EQ, stabilization, and a robust ingestion engine.
 
 ---
 
 ## 🤖 Artificial Intelligence Warning
-**This project was built with significant assistance from advanced AI agents (Antigravity).** 
+**This project was built with significant assistance from advanced AI agents (copiuum group).** 
 While the codebase is hardened and functional, users should expect a highly specialized, native-first architecture that prioritizes AI-driven design patterns and direct system integration.
 
 ## ⚠️ Targeting & Compatibility
@@ -16,7 +15,11 @@ This application is strictly optimized and targeted for **Industrial & Enterpris
 -   **Windows 11 24H2 IoT Enterprise LTSC** and up.
 
 *The app utilizes native Windows 11 Mica material and Title Bar Overlays that may not render correctly on Home/Pro versions or older builds.*
-
+ 
+### 🐧 Linux & Cross-Platform Support
+**Linux compatibility is planned but is not currently in active development.** 
+The core of Material Studio is built on cross-platform technologies (Electron/Web Audio); however, many UI features are deeply integrated with native Windows APIs. If you are interested in developing a port for Linux or other operating systems, you are free to clone the repository and contribute to the cross-platform development.
+ 
 ---
 
 ## ✨ Key Features
@@ -80,4 +83,6 @@ npm run package
 
 ---
 
-**Built by Antigravity Studio.** 🚀💎
+---
+
+**Material Studio** is an intellectual property of **copiuum group**, a collective of multiple individuals behind the name. All rights reserved. 🚀💎

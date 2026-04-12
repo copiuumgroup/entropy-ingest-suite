@@ -5,14 +5,35 @@ function createReverbIR(audioCtx: BaseAudioContext, duration: number, decay: num
   const sampleRate = audioCtx.sampleRate;
   const length = sampleRate * duration;
   const impulse = audioCtx.createBuffer(2, length, sampleRate);
-  const left = impulse.getChannelData(0);
-  const right = impulse.getChannelData(1);
+  const L = impulse.getChannelData(0);
+  const R = impulse.getChannelData(1);
 
   for (let i = 0; i < length; i++) {
-    left[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
-    right[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    const n = i / length;
+    // Multi-layered exponential decay for lush textures
+    const envelope = Math.pow(1 - n, decay);
+    
+    // Primary tail (Random noise for dispersion)
+    const noise = (Math.random() * 2 - 1) * envelope;
+    
+    // Secondary reflections (Simulated body)
+    const reflection = Math.sin(i * 0.02) * 0.05 * envelope;
+
+    L[i] = noise + reflection;
+    R[i] = noise - reflection;
   }
   return impulse;
+}
+
+function createSoftCurve() {
+  const n_samples = 44100;
+  const curve = new Float32Array(n_samples);
+  for (let i = 0; i < n_samples; ++i) {
+    const x = (i * 2) / n_samples - 1;
+    // Cubic soft-clipping for warm analog-style saturation
+    curve[i] = (3 / 2) * x - (1 / 2) * (x * x * x);
+  }
+  return curve;
 }
 
 export interface EQSettings {
@@ -29,6 +50,7 @@ export function useAudioEngine(
   activeBuffer: AudioBuffer | null, 
   speed: number, 
   reverbWet: number,
+  roomSize: number,
   eq: EQSettings,
   attenuation: number,
   isLimiterEnabled: boolean,
@@ -113,6 +135,11 @@ export function useAudioEngine(
     analyser.fftSize = 2048; 
     analyser.smoothingTimeConstant = 0.8;
 
+    // High-Fidelity Soft Clipper (Saturation)
+    const softClipper = ctx.createWaveShaper();
+    softClipper.curve = createSoftCurve();
+    softClipper.oversample = '4x';
+
     // Load Worklets
     ctx.audioWorklet.addModule('/worklets/transient-shaper.js').then(() => {
       if (ctx.state === 'closed') return;
@@ -124,7 +151,8 @@ export function useAudioEngine(
     }).catch(err => console.error("Worklet Load Error", err));
 
     summerGain.connect(limiter);
-    limiter.connect(attenuator);
+    limiter.connect(softClipper);
+    softClipper.connect(attenuator);
     attenuator.connect(analyser);
     analyser.connect(ctx.destination);
 
@@ -249,6 +277,15 @@ export function useAudioEngine(
   }, [speed, isElastic]);
 
   useEffect(() => {
+    if (!convolverRef.current || !audioCtxRef.current) return;
+    // Real-time IR regeneration for variable acoustic spaces
+    // Small (0.1) = ~0.6s | Large (1.0) = ~8s
+    const duration = 0.5 + (roomSize * 7.5);
+    const decay = 1.0 + (roomSize * 4.0);
+    convolverRef.current.buffer = createReverbIR(audioCtxRef.current, duration, decay);
+  }, [roomSize]);
+
+  useEffect(() => {
     if (dryGainRef.current && wetGainRef.current && audioCtxRef.current) {
       const dryVal = Math.cos(reverbWet * 0.5 * Math.PI);
       const wetVal = Math.cos((1.0 - reverbWet) * 0.5 * Math.PI);
@@ -269,7 +306,7 @@ export function useAudioEngine(
 
   const renderBuffer = async (
     targetBuffer: AudioBuffer, 
-    p: { speed: number, reverb: number, eq: EQSettings, attenuation: number, limiter: boolean }
+    p: { speed: number, reverb: number, roomSize: number, eq: EQSettings, attenuation: number, limiter: boolean }
   ): Promise<AudioBuffer | null> => {
     const offlineCtx = new OfflineAudioContext(
       targetBuffer.numberOfChannels,
@@ -284,7 +321,9 @@ export function useAudioEngine(
     const air = offlineCtx.createBiquadFilter(); air.type = 'highshelf'; air.frequency.value = 12000; air.gain.value = p.eq.air;
 
     const convolver = offlineCtx.createConvolver();
-    convolver.buffer = createReverbIR(offlineCtx, 3.0, 3.0);
+    const duration = 0.5 + (p.roomSize * 7.5);
+    const decay = 1.0 + (p.roomSize * 4.0);
+    convolver.buffer = createReverbIR(offlineCtx, duration, decay);
     const dryGain = offlineCtx.createGain();
     const wetGain = offlineCtx.createGain();
     const summerGain = offlineCtx.createGain();
@@ -301,10 +340,17 @@ export function useAudioEngine(
     const attenuator = offlineCtx.createGain();
     attenuator.gain.value = p.attenuation;
 
+    const softClipper = offlineCtx.createWaveShaper();
+    softClipper.curve = createSoftCurve();
+    softClipper.oversample = '4x';
+
     sub.connect(bass); bass.connect(mid); mid.connect(treble); treble.connect(air);
     air.connect(dryGain); air.connect(convolver);
     convolver.connect(wetGain); dryGain.connect(summerGain); wetGain.connect(summerGain);
-    summerGain.connect(limiter); limiter.connect(attenuator); attenuator.connect(offlineCtx.destination);
+    summerGain.connect(limiter); 
+    limiter.connect(softClipper);
+    softClipper.connect(attenuator); 
+    attenuator.connect(offlineCtx.destination);
 
     const source = offlineCtx.createBufferSource();
     source.buffer = targetBuffer;
