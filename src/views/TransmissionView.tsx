@@ -137,11 +137,11 @@ const TransmissionView: React.FC = () => {
 
       <div className="grid grid-cols-12 gap-10 flex-1 min-h-0">
         <div className="col-span-12 lg:col-span-8 flex flex-col gap-6 min-h-0">
-            <div className="m3-card bg-black/20 p-10 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+            <div className="m3-glass-subtle rounded-5xl p-10 flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto custom-scrollbar border border-[var(--color-outline)] shadow-xl">
                 <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-3xl font-black uppercase tracking-tighter">Request Ingest</h2>
-                    <div className="flex bg-black p-1 rounded-full border border-[var(--color-outline)] gap-1">
+                    <div className="flex bg-[var(--color-surface)]/40 p-1 rounded-full border border-[var(--color-outline)] gap-1">
                             {(['audio', 'video'] as const).map(m => (
                                 <button key={m} onClick={() => setIngestMode(m)} className={cn("px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all", ingestMode === m ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-lg" : "opacity-30 hover:opacity-100")}>{m}</button>
                             ))}
@@ -157,7 +157,7 @@ const TransmissionView: React.FC = () => {
                     <button 
                         onClick={handleUnpack} 
                         disabled={!cloudUrls || isStaging} 
-                        className="absolute bottom-6 right-6 m3-button m3-button-primary shadow-[0_20px_40px_rgba(255,255,255,0.05)]"
+                        className="absolute bottom-6 right-6 m3-button m3-button-primary shadow-[0_20px_40px_rgba(var(--color-primary-rgb),0.1)]"
                     >
                         {isStaging ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} Fetch Metadata
                     </button>
@@ -186,8 +186,8 @@ const TransmissionView: React.FC = () => {
         </div>
 
         <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 min-h-0">
-            <div className="flex-1 bg-[var(--color-surface-variant)] rounded-5xl flex flex-col min-h-0 border border-[var(--color-outline)] shadow-2xl overflow-hidden">
-                <div className="p-1.5 bg-black/40 border-b border-[var(--color-outline)] flex">
+            <div className="flex-1 m3-glass-subtle rounded-5xl flex flex-col min-h-0 border border-[var(--color-outline)] shadow-2xl overflow-hidden">
+                <div className="p-1.5 bg-[var(--color-surface)]/20 border-b border-[var(--color-outline)] flex">
                    {(['downloads', 'studio'] as const).map(t => (
                       <button 
                         key={t}
@@ -206,7 +206,7 @@ const TransmissionView: React.FC = () => {
                 <div className="flex-1 p-8 font-mono text-[10px] overflow-y-auto custom-scrollbar leading-relaxed">
                     <div className="h-full flex flex-col">
                         {consoleTab === 'downloads' ? (
-                           downloadLogs.length === 0 ? <span className="italic opacity-10 py-10">Waiting...</span> : downloadLogs.map((log, i) => <div key={i} className="mb-2 border-l border-white/10 pl-4 opacity-40">{log}</div>)
+                           downloadLogs.length === 0 ? <span className="italic opacity-10 py-10">Waiting...</span> : downloadLogs.map((log, i) => <div key={i} className="mb-2 border-l border-[var(--color-outline)] pl-4 opacity-40">{log}</div>)
                         ) : (
                            studioLogs.length === 0 ? <span className="italic opacity-10 py-10">Studio Node Idle...</span> : studioLogs.map((log, i) => <div key={i} className="mb-2 border-l border-[var(--color-primary)] pl-4 text-[var(--color-primary)] opacity-80">{log}</div>)
                         )}
@@ -215,12 +215,12 @@ const TransmissionView: React.FC = () => {
                 </div>
 
                 {isProcessing && consoleTab === 'downloads' && (
-                    <div className="h-1.5 w-full bg-white/5 relative overflow-hidden">
+                    <div className="h-1.5 w-full bg-[var(--color-surface)]/10 relative overflow-hidden">
                         <motion.div initial={{ width: 0 }} animate={{ width: `${overallProgress}%` }} className="absolute h-full bg-[var(--color-primary)] shadow-[0_0_20px_var(--color-primary)]" />
                     </div>
                 )}
 
-                <div className="p-10 bg-black/40 border-t border-[var(--color-outline)] flex flex-col gap-6">
+                <div className="p-10 bg-[var(--color-surface)]/20 border-t border-[var(--color-outline)] flex flex-col gap-6">
                     <div className="flex items-center justify-between px-2">
                         <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Session Queue</span>
                         <div className="m3-chip">{queue.length}</div>
@@ -228,7 +228,7 @@ const TransmissionView: React.FC = () => {
                     
                     <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-3">
                         {queue.map(item => (
-                            <div key={item.id} className={cn("p-4 rounded-3xl border flex items-center gap-4 transition-all duration-500", item.status === 'success' ? "bg-white/5 border-white/10 text-white" : item.status === 'processing' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl scale-[1.02]" : "bg-black border-[var(--color-outline)] opacity-40")}>
+                            <div key={item.id} className={cn("p-4 rounded-3xl border flex items-center gap-4 transition-all duration-500", item.status === 'success' ? "bg-[var(--color-primary)]/5 border-[var(--color-outline)] text-[var(--color-on-surface)]" : item.status === 'processing' ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl scale-[1.02]" : "bg-[var(--color-surface)]/40 border-[var(--color-outline)] opacity-40")}>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[10px] font-black uppercase truncate tracking-tight">{item.title || item.url}</p>
                                     <p className="text-[8px] font-bold opacity-60 uppercase mt-0.5 tracking-widest">{item.status}</p>
@@ -241,7 +241,7 @@ const TransmissionView: React.FC = () => {
                     <button 
                         onClick={processQueue} 
                         disabled={queue.length === 0 || isProcessing} 
-                        className="m3-button m3-button-primary w-full py-5 text-[11px] shadow-[0_20px_50px_rgba(255,255,255,0.05)]"
+                        className="m3-button m3-button-primary w-full py-5 text-[11px] shadow-[0_20px_50px_rgba(var(--color-primary-rgb),0.1)]"
                     >
                         {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CloudDownload className="w-5 h-5" />} Start Transmission
                     </button>

@@ -34,7 +34,7 @@ const VaultView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }
         </label>
       </div>
 
-      <div className="flex-1 bg-[var(--color-surface-variant)] rounded-5xl p-10 overflow-y-auto custom-scrollbar shadow-2xl border border-[var(--color-outline)]">
+      <div className="flex-1 m3-glass-subtle rounded-5xl p-10 overflow-y-auto custom-scrollbar shadow-2xl border border-[var(--color-outline)]">
         <div className="flex items-center gap-4 mb-8 px-2">
             <h2 className="text-3xl font-black uppercase tracking-tighter">Collection</h2>
             <div className="m3-chip opacity-40">{library?.length || 0} ITEMS</div>
@@ -47,9 +47,9 @@ const VaultView: React.FC<Props> = ({ onOpenProject, onUpload, onDeleteProject }
                 key={project.id} 
                 whileHover={{ scale: 1.02 }}
                 onClick={() => onOpenProject(project)} 
-                className="p-5 bg-black/40 rounded-4xl border border-[var(--color-outline)] flex items-center gap-5 cursor-pointer hover:border-[var(--color-primary)] hover:bg-white/5 transition-all duration-500 group"
+                className="p-5 m3-glass-subtle rounded-4xl border border-[var(--color-outline)] flex items-center gap-5 cursor-pointer hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-all duration-500 group"
               >
-                <div className="w-20 h-20 rounded-3xl bg-black flex-shrink-0 overflow-hidden shadow-2xl border border-white/5">
+                <div className="w-20 h-20 rounded-3xl bg-[var(--color-surface)]/20 flex-shrink-0 overflow-hidden shadow-2xl border border-[var(--color-outline)]">
                   {project.coverArt ? (
                     <img src={project.coverArt} className="w-full h-full object-cover" />
                   ) : (

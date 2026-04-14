@@ -21,10 +21,10 @@ const IngestStage: React.FC<Props> = ({ info, onRemove, onCommit, isProcessing }
       initial={{ opacity: 0, scale: 0.95, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95, y: -20 }}
-      className="p-6 bg-[var(--color-surface)] rounded-[32px] border border-white/5 shadow-2xl flex flex-col gap-6"
+      className="p-6 m3-glass-subtle rounded-[32px] border border-[var(--color-outline)] shadow-2xl flex flex-col gap-6"
     >
       <div className="flex gap-6">
-        <div className="w-32 h-32 rounded-2xl overflow-hidden shadow-lg shrink-0 bg-black/20">
+        <div className="w-32 h-32 rounded-2xl overflow-hidden shadow-lg shrink-0 bg-[var(--color-surface)]/20">
           <img src={info.thumbnail} className="w-full h-full object-cover" alt="" />
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">

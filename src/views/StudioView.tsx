@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, Pause, SkipForward, SkipBack, Music, Sparkles, Zap, MicOff, Settings2, Share } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Music, Sparkles, Zap, MicOff, Folder, Share } from 'lucide-react';
 import Waveform from '../Waveform';
 import StudioVisualizer from '../StudioVisualizer';
 import type { Track } from '../types';
@@ -79,7 +79,7 @@ const StudioView: React.FC<Props> = ({
         </div>
 
         <div className="flex gap-4">
-             <button className="m3-button opacity-40 hover:opacity-100"><Settings2 className="w-4 h-4" /> Config</button>
+             <button className="m3-button opacity-40 hover:opacity-100"><Folder className="w-4 h-4" /> Config</button>
              <button onClick={onExport} className="m3-button m3-button-primary"><Share className="w-4 h-4" /> Render Master</button>
         </div>
       </div>
@@ -87,9 +87,9 @@ const StudioView: React.FC<Props> = ({
       <div className="flex-1 grid grid-cols-12 gap-10 min-h-0 relative z-10">
           {/* Main Visualizer & Waveform Workspace */}
           <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
-              <div className="flex-1 bg-black/40 rounded-5xl border border-[var(--color-outline)] overflow-hidden relative shadow-2xl">
+              <div className="flex-1 m3-glass-deep rounded-5xl border border-[var(--color-outline)] overflow-hidden relative shadow-2xl">
                   <StudioVisualizer analyser={analyser} audioCtx={null} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[var(--color-surface)]/80 via-transparent to-transparent pointer-events-none" />
                   
                   <div className="absolute bottom-10 left-10 right-10 flex flex-col gap-6">
                       <div className="flex items-end justify-between px-2">
@@ -99,17 +99,17 @@ const StudioView: React.FC<Props> = ({
                           </div>
                           <div className="flex items-center gap-6 font-mono text-xs opacity-40">
                               <span>{formatTime(currentTime)}</span>
-                              <div className="w-px h-4 bg-white/20" />
+                              <div className="w-px h-4 bg-[var(--color-outline)]" />
                               <span>{formatTime(duration)}</span>
                           </div>
                       </div>
-                      <div className="h-24 flex items-center bg-white/5 rounded-4xl px-8 border border-white/5 backdrop-blur-3xl">
+                      <div className="h-24 flex items-center m3-glass-subtle rounded-4xl px-8 border border-[var(--color-outline)]">
                           <Waveform buffer={track.buffer!} currentTime={currentTime} duration={duration} onSeek={seekTo} />
                       </div>
                   </div>
               </div>
 
-              <div className="bg-[var(--color-surface-variant)] rounded-4xl p-8 flex items-center justify-between border border-[var(--color-outline)]">
+              <div className="m3-glass-subtle rounded-4xl p-8 flex items-center justify-between border border-[var(--color-outline)]">
                   <div className="flex items-center gap-6">
                       <button className="p-4 opacity-30 hover:opacity-100 transition-all active:scale-90"><SkipBack className="w-6 h-6" /></button>
                       <button 
@@ -121,23 +121,23 @@ const StudioView: React.FC<Props> = ({
                       <button className="p-4 opacity-30 hover:opacity-100 transition-all active:scale-90"><SkipForward className="w-6 h-6" /></button>
                   </div>
 
-                  <div className="flex items-center gap-4 bg-black/40 p-2 rounded-[32px] border border-white/5 shadow-inner">
+                  <div className="flex items-center gap-4 m3-glass-subtle p-2 rounded-[32px] border border-[var(--color-outline)] shadow-inner">
                       <button 
                          onClick={toggleSlowed}
-                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", isSlowed ? "bg-[var(--color-primary)] text-white" : "opacity-30 hover:opacity-100")}
+                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", isSlowed ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
                       >
                          <Sparkles className="w-4 h-4" /> Slowed + Reverb
                       </button>
                       <button 
                          onClick={toggleNightcore}
-                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", effects.isNightcore ? "bg-[var(--color-primary)] text-white" : "opacity-30 hover:opacity-100")}
+                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", effects.isNightcore ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]" : "opacity-30 hover:opacity-100")}
                       >
                          <Zap className="w-4 h-4" /> Nightcore
                       </button>
-                      <div className="w-px h-8 bg-white/10 mx-2" />
+                      <div className="w-px h-8 bg-[var(--color-outline)] mx-2" />
                       <button 
                          onClick={toggleVocal}
-                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", effects.isVocalReduced ? "bg-red-500 text-white" : "opacity-30 hover:opacity-100")}
+                         className={cn("px-8 py-4 rounded-[24px] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all", effects.isVocalReduced ? "bg-red-600 text-white" : "opacity-30 hover:opacity-100")}
                       >
                          <MicOff className="w-4 h-4" /> Vocal Reducer
                       </button>
@@ -147,7 +147,7 @@ const StudioView: React.FC<Props> = ({
 
           {/* Right Panel: Rack/Details */}
           <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
-              <div className="flex-1 bg-[var(--color-surface-variant)] rounded-5xl border border-[var(--color-outline)] p-10 flex flex-col gap-8 shadow-2xl">
+              <div className="flex-1 m3-glass-subtle rounded-5xl border border-[var(--color-outline)] p-10 flex flex-col gap-8 shadow-2xl">
                   <div className="flex items-center justify-between">
                       <h3 className="text-xl font-black uppercase tracking-tighter">Chain Status</h3>
                       <div className="m3-chip">NODE-01</div>
@@ -159,7 +159,7 @@ const StudioView: React.FC<Props> = ({
                               <span>Playback Rate</span>
                               <span>{effects.speed.toFixed(2)}x</span>
                           </div>
-                          <div className="h-1.5 w-full bg-black rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-[var(--color-surface)]/20 rounded-full overflow-hidden">
                               <motion.div 
                                 initial={{ width: 0 }}
                                 animate={{ width: `${(effects.speed / 2) * 100}%` }}
@@ -173,7 +173,7 @@ const StudioView: React.FC<Props> = ({
                               <span>Reverb Wetness</span>
                               <span>{Math.round(effects.reverbWet * 100)}%</span>
                           </div>
-                          <div className="h-1.5 w-full bg-black rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-[var(--color-surface)]/20 rounded-full overflow-hidden">
                               <motion.div 
                                 initial={{ width: 0 }}
                                 animate={{ width: `${effects.reverbWet * 100}%` }}
@@ -183,7 +183,7 @@ const StudioView: React.FC<Props> = ({
                       </div>
                   </div>
 
-                  <div className="mt-auto p-6 bg-black/40 rounded-4xl border border-white/5 flex flex-col gap-4">
+                  <div className="mt-auto p-6 m3-glass-subtle rounded-4xl border border-[var(--color-outline)] flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                           <div className="w-2 h-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
                           <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Engine Telemetry</span>

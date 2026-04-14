@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipForward, SkipBack, ListMusic, Sparkles, Zap, MicOff } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, ListMusic, Sparkles, Zap, MicOff, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Waveform from '../Waveform';
 import StudioVisualizer from '../StudioVisualizer';
@@ -16,6 +16,7 @@ interface Props {
   analyser: AnalyserNode | null;
   effects: StudioEffectParams;
   setEffects: (effects: StudioEffectParams) => void;
+  onClose?: () => void;
 }
 
 const FloatingPlayer: React.FC<Props> = ({ 
@@ -27,7 +28,8 @@ const FloatingPlayer: React.FC<Props> = ({
   seekTo, 
   analyser,
   effects,
-  setEffects
+  setEffects,
+  onClose
 }) => {
   
   const toggleSlowed = () => {
@@ -58,8 +60,16 @@ const FloatingPlayer: React.FC<Props> = ({
         initial={{ y: 100, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 100, opacity: 0, scale: 0.95 }}
-        className="m3-glass rounded-5xl border border-[var(--color-outline)] p-6 flex items-center gap-8 shadow-[0_30px_60px_rgba(0,0,0,0.5)] overflow-hidden relative"
+        className="m3-glass-deep rounded-5xl border border-[var(--color-outline)] p-6 flex items-center gap-8 shadow-2xl overflow-hidden relative"
       >
+        {onClose && (
+          <button 
+            onClick={onClose}
+            className="absolute top-4 right-6 p-2 opacity-20 hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 rounded-full transition-all z-[20]"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         {/* Visualizer Background */}
         <div className="absolute inset-0 opacity-10 pointer-events-none">
              <StudioVisualizer analyser={analyser} audioCtx={null} />
@@ -67,12 +77,12 @@ const FloatingPlayer: React.FC<Props> = ({
 
         {/* Track Info */}
         <div className="flex items-center gap-6 w-[280px] shrink-0 relative z-10">
-          <div className="w-14 h-14 rounded-3xl overflow-hidden shadow-2xl bg-black/40 flex-shrink-0 relative group border border-white/10">
+          <div className="w-14 h-14 rounded-3xl overflow-hidden shadow-2xl m3-glass-subtle flex-shrink-0 relative group border border-[var(--color-outline)]">
             {track.metadata?.coverArt ? (
               <img src={track.metadata.coverArt} className="w-full h-full object-cover" alt="" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[var(--color-primary)] to-black flex items-center justify-center">
-                <ListMusic className="w-5 h-5 text-white/40" />
+              <div className="w-full h-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-surface)] flex items-center justify-center">
+                <ListMusic className="w-5 h-5 opacity-40" />
               </div>
             )}
           </div>
@@ -88,21 +98,21 @@ const FloatingPlayer: React.FC<Props> = ({
             <div className="flex items-center gap-2 mr-4">
                <button 
                   onClick={toggleSlowed}
-                  className={cn("p-3 rounded-2xl transition-all border", isSlowed ? "bg-[var(--color-primary)] text-white border-white/20" : "bg-white/5 opacity-30 hover:opacity-100 border-white/5")}
+                  className={cn("p-3 rounded-2xl transition-all border", isSlowed ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-outline)]" : "bg-[var(--color-primary)]/5 opacity-40 hover:opacity-100 border-[var(--color-outline)]")}
                   title="Slowed + Reverb (0.8x)"
                >
                   <Sparkles className="w-4 h-4" />
                </button>
                <button 
                   onClick={toggleNightcore}
-                  className={cn("p-3 rounded-2xl transition-all border", effects.isNightcore ? "bg-[var(--color-primary)] text-white border-white/20" : "bg-white/5 opacity-30 hover:opacity-100 border-white/5")}
+                  className={cn("p-3 rounded-2xl transition-all border", effects.isNightcore ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-outline)]" : "bg-[var(--color-primary)]/5 opacity-40 hover:opacity-100 border-[var(--color-outline)]")}
                   title="Nightcore (1.2x)"
                >
                   <Zap className="w-4 h-4" />
                </button>
                <button 
                   onClick={toggleVocal}
-                  className={cn("p-3 rounded-2xl transition-all border", effects.isVocalReduced ? "bg-red-500 text-white border-white/20" : "bg-white/5 opacity-30 hover:opacity-100 border-white/5")}
+                  className={cn("p-3 rounded-2xl transition-all border", effects.isVocalReduced ? "bg-red-600 text-white border-[var(--color-outline)]" : "bg-[var(--color-primary)]/5 opacity-40 hover:opacity-100 border-[var(--color-outline)]")}
                   title="Vocal Isolation (AI SLot)"
                >
                   <MicOff className="w-4 h-4" />

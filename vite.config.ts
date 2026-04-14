@@ -3,8 +3,16 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
+import fs from 'fs'
+import path from 'path'
+
+const metadata = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'build-metadata.json'), 'utf-8'))
+const buildId = metadata.buildId || '000'
 
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(buildId)
+  },
   plugins: [
     react(), 
     tailwindcss(),

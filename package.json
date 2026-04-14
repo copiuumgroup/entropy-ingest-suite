@@ -1,17 +1,18 @@
 {
   "name": "material-audio-tool",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.0-004",
   "type": "module",
   "main": "dist-electron/main.js",
   "description": "Material Audio Mastery Studio",
   "author": "copiuum group",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "bump": "node scripts/bump-version.js",
+    "build": "npm run bump && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "package": "npm run build && electron-builder"
+    "package": "npm run bump && npm run build && electron-builder"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",

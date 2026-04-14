@@ -50,6 +50,7 @@ function App() {
   }, [theme]);
 
   const [currentView, setCurrentView] = useState<ViewType>('vault');
+  const [isPlayerDismissed, setIsPlayerDismissed] = useState(false);
   const { exportAudio } = useExporter();
 
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -136,6 +137,7 @@ function App() {
       });
       // Automatically switch to studio view when uploading
       setCurrentView('studio');
+      setIsPlayerDismissed(false);
     }
   };
 
@@ -169,6 +171,7 @@ function App() {
     setTracks([loadedTrack]);
     setActiveTrackId(loadedTrack.id);
     setCurrentView('studio');
+    setIsPlayerDismissed(false);
   };
 
   const handleExport = async () => {
@@ -192,7 +195,7 @@ function App() {
 
   return (
     <div className={cn("w-full h-screen overflow-hidden flex transition-all duration-1000 is-windows bg-[var(--color-surface)]")}>
-      <div className="fixed top-0 left-0 w-full h-8 title-bar-drag z-[100] pointer-events-none" />
+      <div className="fixed top-0 left-0 w-full h-8 title-bar-drag z-[100]" />
       
       <SidebarRail 
         currentView={currentView} 
@@ -245,7 +248,7 @@ function App() {
 
       {/* Mini Player for non-studio views */}
       <AnimatePresence>
-        {activeTrack && activeTrack.isReady && currentView !== 'studio' && (
+        {activeTrack && activeTrack.isReady && currentView !== 'studio' && !isPlayerDismissed && (
           <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="fixed bottom-0 left-20 right-0 z-[70]">
              <FloatingPlayer 
                track={activeTrack}
@@ -257,6 +260,7 @@ function App() {
                analyser={analyser}
                effects={effects}
                setEffects={setEffects}
+               onClose={() => setIsPlayerDismissed(true)}
              />
           </motion.div>
         )}
