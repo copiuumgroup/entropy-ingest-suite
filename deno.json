@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run -A npm:vite",
+    "bump": "deno run --allow-read --allow-write scripts/bump-version.js",
+    "build": "deno task bump && deno run -A npm:typescript/tsc -b && deno run -A npm:vite build",
+    "lint": "deno run -A npm:eslint .",
+    "preview": "deno run -A npm:vite preview",
+    "package": "deno task build && deno run -A npm:electron-builder"
+  },
+  "nodeModulesDir": "manual",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
+  },
+  "allowScripts": ["npm:electron-winstaller@5.4.0", "npm:electron@41.2.0", "npm:esbuild@0.28.0"]
+}

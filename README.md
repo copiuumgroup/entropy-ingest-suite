@@ -52,7 +52,7 @@ This application is strictly optimized for **Industrial & Enterprise Windows env
 ## 🚀 Getting Started
 
 ### Prerequisites
--   **Node.js v22+**
+-   **Deno v2.1+**
 -   **yt-dlp** (Must be in your system PATH)
 -   **ffmpeg** (Required for high-fidelity audio extraction and native rendering fallback)
 -   **Windows 10/11 LTSC** (Recommended)
@@ -63,22 +63,22 @@ This application is strictly optimized for **Industrial & Enterprise Windows env
 git clone https://github.com/copiuumgroup/material-suite.git
 
 # Install dependencies
-npm install
+deno install
 
 # Run in Development Mode
-npm run dev
+deno task dev
 ```
 
 ### Building for Production
 ```bash
 # Generate a portable standalone .exe
-npm run package
+deno task package
 ```
 
 ---
 
 ## 🛠️ Technology Stack
-- **Core**: Electron, React 19, TypeScript 6.0
+- **Core**: Electron, React 19, TypeScript 6.0, Deno 2
 - **DSP**: Web Audio API (AudioContext & 32-bit Float Offline Rendering)
 - **Video**: FFmpeg WebAssembly (v0.12+)
 - **Styling**: Tailwind CSS v4, Lucide Icons, Framer Motion (Cubic Bézier velocity)

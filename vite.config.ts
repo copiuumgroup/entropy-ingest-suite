@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const metadata = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'build-metadata.json'), 'utf-8'))
 const buildId = metadata.buildId || '000'
@@ -27,10 +30,10 @@ export default defineConfig({
                 'music-metadata',
                 'node-id3',
                 'axios',
-                'fs',
-                'path',
-                'url',
-                'child_process'
+                'node:fs',
+                'node:path',
+                'node:url',
+                'node:child_process'
               ],
               onwarn(warning, warn) {
                 if (warning.code === 'INVALID_OPTION' && warning.message.includes('"freeze"')) return;
