@@ -64,15 +64,15 @@ export const SettingsModal: React.FC<Props> = ({
                 
                 <div className="space-y-4">
                   <SettingItem 
-                    label="Theme Mode" 
-                    description="Toggle between Light and Deep OLED surface styles."
+                    label="Surface Architecture" 
+                    description="Toggle between monolithic OLED Black and Midnight Slate with subtle gradients."
                   >
                     <button 
                       onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                      className="flex items-center gap-3 px-6 py-2 border border-[var(--color-outline)] font-bold text-[10px] uppercase transition-all rounded-[var(--radius-element)]"
+                      className="flex items-center gap-3 px-6 py-2 border border-[var(--color-outline)] font-bold text-[10px] uppercase transition-all rounded-[var(--radius-element)] hover:bg-white/5 active:scale-95"
                     >
                       {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                      {theme.toUpperCase()}
+                      {theme === 'light' ? "Midnight" : "OLED"}
                     </button>
                   </SettingItem>
                 </div>

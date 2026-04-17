@@ -132,8 +132,8 @@ function App() {
   useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.updateTitleBarOverlay({
-        color: theme === 'dark' ? '#000000' : '#ffffff',
-        symbolColor: theme === 'dark' ? '#ffffff' : '#000000'
+        color: theme === 'dark' ? '#000000' : '#1a1c1e',
+        symbolColor: '#ffffff'
       });
     }
   }, [theme]);
