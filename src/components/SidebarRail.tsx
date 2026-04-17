@@ -1,10 +1,9 @@
-import React from 'react';
-import { Database, Activity, Globe, Settings, Moon, Sun } from 'lucide-react';
+import { Database, Activity, Globe, Settings, Moon, Sun, Home, PlayCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 declare const __BUILD_ID__: string;
 
-export type ViewType = 'vault' | 'studio' | 'yt-dlp';
+export type ViewType = 'home' | 'player' | 'vault' | 'studio' | 'yt-dlp';
 
 interface Props {
   currentView: ViewType;
@@ -22,6 +21,8 @@ const SidebarRail: React.FC<Props> = ({
     setTheme 
 }) => {
   const items = [
+    { id: 'home' as ViewType, icon: Home, label: 'Home' },
+    { id: 'player' as ViewType, icon: PlayCircle, label: 'Player' },
     { id: 'vault' as ViewType, icon: Database, label: 'Vault' },
     { id: 'studio' as ViewType, icon: Activity, label: 'Studio' },
     { id: 'yt-dlp' as ViewType, icon: Globe, label: 'yt-dlp' },

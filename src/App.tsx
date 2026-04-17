@@ -1,5 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAudioEngine } from './hooks/useAudioEngine';
+const HomeView = lazy(() => import('./views/HomeView'));
+const MediaPlayerView = lazy(() => import('./views/MediaPlayerView'));
 const VaultView = lazy(() => import('./views/VaultView'));
 const StudioView = lazy(() => import('./views/StudioView'));
 const YTDLPView = lazy(() => import('./views/YTDLPView'));
@@ -75,7 +77,7 @@ function App() {
     document.documentElement.className = theme;
   }, [theme]);
 
-  const [currentView, setCurrentView] = useState<ViewType>('vault');
+  const [currentView, setCurrentView] = useState<ViewType>('home');
   const [isPlayerDismissed, setIsPlayerDismissed] = useState(false);
   const { exportAudio, exportVideo, isExporting, progress } = useExporter();
 
@@ -414,7 +416,7 @@ function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-[var(--color-surface)]">
+      <main className="flex-1 flex flex-col relative overflow-hidden bg-[var(--color-surface)] pt-[38px]">
          <div className="flex-1 overflow-hidden relative z-10">
          <AnimatePresence mode="wait">
          <Suspense fallback={
@@ -431,6 +433,12 @@ function App() {
             transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
             className="w-full h-full flex flex-col"
           >
+          {currentView === 'home' && (
+            <HomeView key="home" onNavigate={setCurrentView} />
+          )}
+          {currentView === 'player' && (
+            <MediaPlayerView key="player" effects={effects} setEffects={setEffects} />
+          )}
           {currentView === 'vault' && (
             <VaultView 
               key="vault"

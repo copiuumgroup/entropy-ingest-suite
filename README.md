@@ -31,6 +31,12 @@ This application is strictly optimized for **Industrial & Enterprise Windows env
 - **Nightcore**: High-speed resampling with frequency preservation and "Hyper-pop" aesthetic.
 - **Flawless Seek Sync**: Physically decoupled 'Real World Time' and 'Buffer Time' ensures perfect scrubbing even during heavy speed/pitch manipulation.
 
+### 🎥 Live Media Player (Native DSP Streaming)
+- **Zero-RAM Decoder**: Utilizes `MediaElementAudioSourceNode` to stream massive 4K video and audio directly into the mastering engine without memory-heavy buffering.
+- **Native Pitch-Shift (Resampling)**: Dynamically binds the Speed/Pitch matrix using the Chromium hardware-accelerated resampler for zero-latency Nightcore/Slowed effects.
+- **Local Folder Armed**: Direct integration with the Windows File System via the `webkitdirectory` API—load and shuffle through thousands of local MP4s/MP3s with ease.
+- **True Shuffle & Repeat**: Implemented Fisher-Yates shuffle algorithms and advanced transport logic for high-fidelity playback management.
+
 ### 📹 High-Performance Video Export
 - **FFmpeg WASM Integration**: Native browser-based video multiplexing (H.264 / AAC) at 320kbps.
 - **Variable FPS Control**: Toggle between 24 (Cinematic/Fast), 30 (Standard), and 60 (Smooth) FPS to optimize render speed vs. visual fluidity.
@@ -79,6 +85,21 @@ npm run package
 - **Ingestion**: Hardened `yt-dlp` Native Process Management
 - **Storage**: Dexie.js (IndexedDB) with native FS-Metadata caching
 - **Integration**: Microsoft Mica / Native Windows Controls Overlay (WCO)
+
+---
+
+## 📊 Project Statistics (Language Breakdown)
+Analyzing the core repository (excluding `node_modules` and build dist):
+
+| Category | File Type | Count | Total Lines |
+| :--- | :--- | :--- | :--- |
+| **UI & Components** | `.tsx` (React) | 19 | **3,016** |
+| **Logic & Engine** | `.ts` (TypeScript) | 19 | **2,526** |
+| **Build & Scripts** | `.js`/`.json` | 6 | **289** |
+| **Design System** | `.css` (Tailwind) | 1 | **133** |
+| **DSP Engine** | `.py` (Python) | 2 | **113** |
+
+**Total:** ~6,077 Lines of Code
 
 ---
 

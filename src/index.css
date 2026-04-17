@@ -9,14 +9,14 @@
   
   --color-surface: #000000;
   --color-surface-rgb: 0, 0, 0;
-  --color-on-surface: #e8e8e8;      /* Slightly off-white — easy on eyes against OLED */
+  --color-on-surface: #ffffff;      
   
   /* Cards & panels — perceptible lift above pure black */
   --color-surface-variant: #141414;
-  --color-on-surface-variant: rgba(232, 232, 232, 0.7);
+  --color-on-surface-variant: rgba(255, 255, 255, 0.85);
   
   /* Borders — clearly visible without being noisy */
-  --color-outline: rgba(255, 255, 255, 0.14);
+  --color-outline: rgba(255, 255, 255, 0.25);
 
   /* Radius scale */
   --radius-container: 16px;
