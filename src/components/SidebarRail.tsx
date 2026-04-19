@@ -1,4 +1,4 @@
-import { Database, Activity, Globe, Settings, Moon, Sun, Home, PlayCircle } from 'lucide-react';
+import { Activity, Globe, Settings, Moon, Sun, Home, PlayCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 declare const __BUILD_ID__: string;
@@ -23,16 +23,24 @@ const SidebarRail: React.FC<Props> = ({
   const items = [
     { id: 'home' as ViewType, icon: Home, label: 'Home' },
     { id: 'player' as ViewType, icon: PlayCircle, label: 'Player' },
-    { id: 'vault' as ViewType, icon: Database, label: 'Vault' },
     { id: 'studio' as ViewType, icon: Activity, label: 'Studio' },
     { id: 'yt-dlp' as ViewType, icon: Globe, label: 'yt-dlp' },
   ];
 
   return (
     <div className="w-20 flex flex-col items-center py-10 gap-10 relative z-[60] suite-glass-deep border-r border-[var(--color-outline)]">
-      <div className="w-12 h-12 flex items-center justify-center mb-4 relative overflow-hidden group border border-[var(--color-outline)] bg-[var(--color-primary)]/10 rounded-[var(--radius-element)]">
-        <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <img src="/icon.png" className="w-8 h-8 object-contain opacity-80 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 select-none" alt="Material Suite Logo" />
+      <div className="w-12 h-12 flex items-center justify-center mb-4 relative group border border-[var(--color-outline)] bg-[var(--color-primary)]/5 rounded-[var(--radius-element)] transition-all hover:border-[var(--color-primary)]/30">
+        <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <svg 
+          width="24" height="24" 
+          viewBox="0 0 32 32" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg" 
+          className="text-[var(--color-primary)] transition-transform group-hover:scale-110 duration-500 relative z-10"
+        >
+          <path d="M0 4C0 1.79086 1.79086 0 4 0H28C30.2091 0 32 1.79086 32 4V28C32 30.2091 30.2091 32 28 32H4C1.79086 32 0 30.2091 0 28V4Z" fill="currentColor"/>
+          <path d="M32 0L18 14" stroke="var(--color-surface)" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
       </div>
 
       <div className="flex-1 flex flex-col gap-6">

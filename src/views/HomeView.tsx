@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Activity, Database, PlayCircle, ArrowRight } from 'lucide-react';
+import { Globe, Activity, PlayCircle, ArrowRight } from 'lucide-react';
 import type { ViewType } from '../components/SidebarRail';
 
 interface HomeViewProps {
@@ -10,30 +10,21 @@ interface HomeViewProps {
 const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
   const cards = [
     {
-      id: 'yt-dlp',
-      title: 'YT-DLP Downloader',
-      description: 'Download the highest quality media straight into your local environment.',
-      icon: Globe,
-      color: 'text-blue-400',
-      action: () => onNavigate('yt-dlp'),
-      available: true
-    },
-    {
-      id: 'vault',
-      title: 'Local Vault',
-      description: 'Your central library for managed, secure audio projects and offline assets.',
-      icon: Database,
-      color: 'text-purple-400',
-      action: () => onNavigate('vault'),
-      available: true
-    },
-    {
       id: 'studio',
-      title: 'Audio Studio',
-      description: 'Master and process audio locally using pristine WebGPU dynamics.',
+      title: 'Production Studio',
+      description: 'Your central library and mastering suite. Manage, demix, and master audio locally.',
       icon: Activity,
       color: 'text-emerald-400',
       action: () => onNavigate('studio'),
+      available: true
+    },
+    {
+      id: 'yt-dlp',
+      title: 'YT-DLP Downloader',
+      description: 'Download high-quality media straight into your local environment.',
+      icon: Globe,
+      color: 'text-blue-400',
+      action: () => onNavigate('yt-dlp'),
       available: true
     },
     {
@@ -48,15 +39,15 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="w-full h-full flex flex-col p-12 overflow-y-auto">
+    <div className="w-full h-full flex flex-col items-center justify-center p-12 overflow-y-auto text-center">
       {/* Header Area */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="mb-16 mt-8"
+        className="mb-16 mt-8 flex flex-col items-center"
       >
-        <h1 className="text-5xl font-black tracking-tight mb-4 text-[var(--color-primary)]">
+        <h1 className="text-6xl font-black tracking-tighter mb-4 text-[var(--color-primary)] uppercase">
           Material Suite
         </h1>
         <p className="text-lg opacity-60 font-medium max-w-2xl text-[var(--color-on-surface)] leading-relaxed">
@@ -65,7 +56,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
       </motion.div>
 
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8 max-w-6xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl w-full">
         {cards.map((card, idx) => (
           <motion.div
             key={card.id}
@@ -76,9 +67,8 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
             <button
               onClick={card.action}
               disabled={!card.available}
-              className={`w-full text-left p-8 suite-glass-deep border border-[var(--color-outline)] rounded-[var(--radius-container)] group transition-all duration-300 flex flex-col h-full relative overflow-hidden focus:outline-none ${
-                card.available ? 'hover:bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/40 hover:-translate-y-1 hover:shadow-2xl' : 'opacity-40 cursor-not-allowed'
-              }`}
+              className={`w-full text-left p-8 suite-glass-deep border border-[var(--color-outline)] rounded-[var(--radius-container)] group transition-all duration-300 flex flex-col h-full relative overflow-hidden focus:outline-none ${card.available ? 'hover:bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/40 hover:-translate-y-1 hover:shadow-2xl' : 'opacity-40 cursor-not-allowed'
+                }`}
             >
               {/* Subtle background glow effect on hover */}
               <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />

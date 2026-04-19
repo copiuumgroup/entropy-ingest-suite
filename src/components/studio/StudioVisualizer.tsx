@@ -19,18 +19,27 @@ const StudioVisualizer: React.FC<Props> = ({ analyser }) => {
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
+    let currentColor = '#ffffff';
+    const updateColor = () => {
+      currentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-on-surface').trim() || '#fff';
+    };
+    updateColor();
+
+    const observer = new MutationObserver(updateColor);
+    observer.observe(document.documentElement, { attributes: true });
+
     const render = () => {
-      const width = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-      const height = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+      const width = canvas.width;
+      const height = canvas.height;
       analyser.getByteFrequencyData(dataArray);
 
       ctx.clearRect(0, 0, width, height);
 
-      const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-on-surface').trim() || '#fff';
       const barCount = 48;
       const totalPad = 4;
       const barWidth = (width - (barCount * totalPad)) / barCount;
 
+      ctx.fillStyle = currentColor;
       for (let i = 0; i < barCount; i++) {
         const percent = i / barCount;
         const sampleIdx = Math.floor(Math.pow(percent, 1.3) * bufferLength * 0.6);
@@ -40,10 +49,8 @@ const StudioVisualizer: React.FC<Props> = ({ analyser }) => {
         const h = Math.max(2, smoothedHeights.current[i]);
         const x = i * (barWidth + totalPad) + totalPad;
 
-        ctx.fillStyle = primaryColor;
         ctx.globalAlpha = 0.8;
         ctx.beginPath();
-        // Drawing capsule-like bars
         const r = barWidth / 2;
         ctx.roundRect(x, height - h, barWidth, h, [r, r, 0, 0]);
         ctx.fill();
@@ -53,8 +60,17 @@ const StudioVisualizer: React.FC<Props> = ({ analyser }) => {
       rafRef.current = requestAnimationFrame(render);
     };
 
+    const resize = () => {
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    };
+    window.addEventListener('resize', resize);
+    resize();
+
     render();
     return () => {
+      window.removeEventListener('resize', resize);
+      observer.disconnect();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [analyser]);

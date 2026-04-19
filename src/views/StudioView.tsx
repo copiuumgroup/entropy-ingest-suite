@@ -9,8 +9,10 @@ import { AudioKnob } from '../components/common/AudioKnob';
 import { cn } from '../utils';
 import { useState } from 'react';
 import { StemEngine } from '../services/engine/StemEngine';
-import { db } from '../db/database';
+import { db, type ProjectMetadata } from '../db/database';
 import { useToaster } from '../components/Toaster';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { Plus, Trash2, Database, Search } from 'lucide-react';
 
 import type { ImpulseData } from '../db/database';
 
@@ -32,6 +34,9 @@ interface Props {
   hardwareMetrics: { cpuPercent: number; memoryWorkingSetMB: number; memoryPrivateMB: number } | null;
   onEject: () => void;
   setTracks: React.Dispatch<React.SetStateAction<Track[]>>;
+  onOpenProject: (project: ProjectMetadata) => void;
+  onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onDeleteProject: (id: number) => void;
 }
 
 const StudioView: React.FC<Props> = ({ 
@@ -51,10 +56,22 @@ const StudioView: React.FC<Props> = ({
   onIRDelete,
   hardwareMetrics,
   onEject,
-  setTracks
+  setTracks,
+  onOpenProject,
+  onUpload,
+  onDeleteProject
 }) => {
   const [isDemixing, setIsDemixing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToaster();
+
+  const library = useLiveQuery(() => 
+    db.projects
+      .where('name')
+      .startsWithIgnoreCase(searchQuery)
+      .reverse()
+      .sortBy('lastModified')
+  , [searchQuery]);
 
   const handleDemix = async () => {
     if (!track?.internalPath || isDemixing) return;
@@ -97,10 +114,64 @@ const StudioView: React.FC<Props> = ({
 
   if (!track || !track.isReady) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center opacity-10">
-        <Music className="w-32 h-32 mb-8 stroke-[1]" />
-        <h2 className="text-4xl font-black uppercase tracking-tighter">Studio Standby</h2>
-        <p className="text-sm font-bold uppercase tracking-[0.4em] mt-4">Load a source from the Vault to begin mastering</p>
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Library Sidebar (Persistent) */}
+          <div className="w-80 border-r border-[var(--color-outline)] flex flex-col bg-[var(--color-surface)]/40 backdrop-blur-sm relative z-20">
+              <div className="p-6 border-b border-[var(--color-outline)] flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-black uppercase tracking-tighter">Library</h2>
+                      <label className="p-2 bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-full cursor-pointer hover:scale-110 active:scale-95 transition-all">
+                          <Plus className="w-4 h-4" />
+                          <input type="file" accept="audio/*,video/*" multiple className="hidden" onChange={onUpload} />
+                      </label>
+                  </div>
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 opacity-30" />
+                      <input 
+                        type="text" 
+                        placeholder="SEARCH PROJECTS..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-[var(--color-surface-variant)] border border-[var(--color-outline)] rounded-[var(--radius-element)] pl-10 pr-4 py-2 text-[10px] font-bold tracking-widest uppercase focus:outline-none"
+                      />
+                  </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
+                  {library?.map((proj) => (
+                      <div 
+                        key={proj.id} 
+                        onClick={() => onOpenProject(proj)}
+                        className="p-3 border border-[var(--color-outline)] rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer hover:bg-[var(--color-primary)]/5 transition-all group"
+                      >
+                          <div className="w-10 h-10 rounded-sm bg-[var(--color-surface-variant)] flex items-center justify-center shrink-0 overflow-hidden">
+                              {proj.coverArt ? <img src={proj.coverArt} className="w-full h-full object-cover" /> : <Music className="w-4 h-4 opacity-20" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                              <h4 className="text-[11px] font-black uppercase tracking-tight truncate">{proj.name}</h4>
+                              <p className="text-[8px] font-bold uppercase tracking-widest opacity-30 truncate">{proj.artist || 'Unknown'}</p>
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); onDeleteProject(proj.id!); }}
+                            className="opacity-0 group-hover:opacity-100 p-2 hover:text-red-500 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                      </div>
+                  ))}
+                  {(!library || library.length === 0) && (
+                      <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center px-6">
+                          <Database className="w-12 h-12 mb-4" />
+                          <p className="text-[9px] font-bold uppercase tracking-widest">Vault Empty</p>
+                      </div>
+                  )}
+              </div>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center opacity-10">
+            <Music className="w-32 h-32 mb-8 stroke-[1]" />
+            <h2 className="text-4xl font-black uppercase tracking-tighter">Studio Standby</h2>
+            <p className="text-sm font-bold uppercase tracking-[0.4em] mt-4">Load a source from the Library to begin</p>
+          </div>
       </div>
     );
   }
@@ -109,10 +180,59 @@ const StudioView: React.FC<Props> = ({
     <motion.div 
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }} 
-      className="flex-1 flex flex-col gap-6 py-6 px-10 overflow-hidden relative"
+      className="flex-1 flex min-h-0 overflow-hidden relative"
     >
+      {/* Library Sidebar (Persistent) */}
+      <div className="w-80 border-r border-[var(--color-outline)] flex flex-col bg-[var(--color-surface)]/40 backdrop-blur-sm relative z-20">
+          <div className="p-6 border-b border-[var(--color-outline)] flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-black uppercase tracking-tighter">Library</h2>
+                  <label className="p-2 bg-[var(--color-primary)] text-[var(--color-on-primary)] rounded-full cursor-pointer hover:scale-110 active:scale-95 transition-all">
+                      <Plus className="w-4 h-4" />
+                      <input type="file" accept="audio/*,video/*" multiple className="hidden" onChange={onUpload} />
+                  </label>
+              </div>
+              <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 opacity-30" />
+                  <input 
+                    type="text" 
+                    placeholder="SEARCH PROJECTS..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[var(--color-surface-variant)] border border-[var(--color-outline)] rounded-[var(--radius-element)] pl-10 pr-4 py-2 text-[10px] font-bold tracking-widest uppercase focus:outline-none"
+                  />
+              </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
+              {library?.map((proj) => (
+                  <div 
+                    key={proj.id} 
+                    onClick={() => onOpenProject(proj)}
+                    className={cn(
+                      "p-3 border rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer transition-all group",
+                      track.metadata?.title === proj.name ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/40 shadow-lg" : "border-[var(--color-outline)] hover:bg-[var(--color-primary)]/5"
+                    )}
+                  >
+                      <div className="w-10 h-10 rounded-sm bg-[var(--color-surface-variant)] flex items-center justify-center shrink-0 overflow-hidden">
+                          {proj.coverArt ? <img src={proj.coverArt} className="w-full h-full object-cover" /> : <Music className="w-4 h-4 opacity-20" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                          <h4 className="text-[11px] font-black uppercase tracking-tight truncate">{proj.name}</h4>
+                          <p className="text-[8px] font-bold uppercase tracking-widest opacity-30 truncate">{proj.artist || 'Unknown'}</p>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onDeleteProject(proj.id!); }}
+                        className="opacity-0 group-hover:opacity-100 p-2 hover:text-red-500 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                  </div>
+              ))}
+          </div>
+      </div>
 
-      {/* Slim Header Bar */}
+      <div className="flex-1 flex flex-col gap-6 py-6 px-10 overflow-hidden relative">
+        {/* Slim Header Bar */}
       <div className="flex justify-between items-center shrink-0 relative z-10 px-4 py-2 border-b border-[var(--color-outline)] suite-glass-subtle rounded-[var(--radius-container)]">
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
@@ -358,7 +478,8 @@ const StudioView: React.FC<Props> = ({
               </div>
           </div>
       </div>
-    </motion.div>
+    </div>
+</motion.div>
   );
 };
 

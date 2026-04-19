@@ -3,12 +3,15 @@ import React, { useEffect, useRef } from 'react';
 interface Star {
   x: number; y: number;
   vx: number; vy: number;
+  baseVx: number; baseVy: number;
   r: number; phase: number;
   alpha: number;
+  points: number;
 }
 
 const MatrixBackground: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: -1000, y: -1000 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,20 +32,37 @@ const MatrixBackground: React.FC = () => {
 
     const generateStars = () => {
       stars = [];
-      // ~1 star per 5000px² — spacious and clean
-      const count = Math.floor((width * height) / 5000);
+      // ~1 star per 15000px² — very sparse, elegant look
+      const count = Math.floor((width * height) / 15000);
       for (let i = 0; i < count; i++) {
+        const vx = (Math.random() - 0.5) * 0.5;
+        const vy = (Math.random() - 0.5) * 0.5;
         stars.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          // Gentle drift — imperceptibly slow
-          vx: (Math.random() - 0.5) * 0.12,
-          vy: (Math.random() - 0.5) * 0.12,
-          r: Math.random() * 1.4 + 0.3,
+          vx, vy,
+          baseVx: vx, baseVy: vy,
+          r: Math.random() * 3 + 1.2,
           phase: Math.random() * Math.PI * 2,
-          alpha: Math.random() * 0.055 + 0.015,
+          alpha: Math.random() * 0.4 + 0.15,
+          points: 4
         });
       }
+    };
+
+    const drawStarShape = (x: number, y: number, radius: number, points: number, inset: number) => {
+      ctx.beginPath();
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.moveTo(0, 0 - radius);
+      for (let i = 0; i < points; i++) {
+        ctx.rotate(Math.PI / points);
+        ctx.lineTo(0, 0 - (radius * inset));
+        ctx.rotate(Math.PI / points);
+        ctx.lineTo(0, 0 - radius);
+      }
+      ctx.fill();
+      ctx.restore();
     };
 
     const resize = () => {
@@ -52,34 +72,61 @@ const MatrixBackground: React.FC = () => {
       updateThemeColor();
     };
 
+    const onMouseMove = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY };
+    };
+
     // React to theme changes without re-running the whole effect
     const observer = new MutationObserver(() => updateThemeColor());
     observer.observe(document.documentElement, { attributes: true });
 
     window.addEventListener('resize', resize);
+    window.addEventListener('mousemove', onMouseMove);
     resize();
 
     const draw = () => {
-      time += 0.006;
+      time += 0.008;
       ctx.clearRect(0, 0, width, height);
       ctx.fillStyle = currentColor;
 
+      const mouseX = mouseRef.current.x;
+      const mouseY = mouseRef.current.y;
+
       for (const star of stars) {
+        // Interaction: Disturb stars near mouse
+        const dx = star.x - mouseX;
+        const dy = star.y - mouseY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = 100;
+
+        if (dist < maxDist) {
+          const force = (maxDist - dist) / maxDist;
+          const angle = Math.atan2(dy, dx);
+          const pushX = Math.cos(angle) * force * 1.2;
+          const pushY = Math.sin(angle) * force * 1.2;
+          
+          star.vx += pushX;
+          star.vy += pushY;
+        }
+
+        // Apply friction to return to base velocity
+        star.vx += (star.baseVx - star.vx) * 0.05;
+        star.vy += (star.baseVy - star.vy) * 0.05;
+
         // Drift + wrap
         star.x += star.vx;
         star.y += star.vy;
-        if (star.x < 0) star.x = width;
-        if (star.x > width) star.x = 0;
-        if (star.y < 0) star.y = height;
-        if (star.y > height) star.y = 0;
+        
+        if (star.x < -10) star.x = width + 10;
+        if (star.x > width + 10) star.x = -10;
+        if (star.y < -10) star.y = height + 10;
+        if (star.y > height + 10) star.y = -10;
 
-        // Gentle twinkle — slow sine on opacity
-        const twinkle = Math.sin(time + star.phase) * 0.012;
-        ctx.globalAlpha = Math.max(0.008, star.alpha + twinkle);
+        // Twinkle
+        const twinkle = Math.sin(time * 2 + star.phase) * 0.15;
+        ctx.globalAlpha = Math.max(0.1, star.alpha + twinkle);
 
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
-        ctx.fill();
+        drawStarShape(star.x, star.y, star.r, star.points, 0.25);
       }
 
       ctx.globalAlpha = 1.0;
@@ -90,6 +137,7 @@ const MatrixBackground: React.FC = () => {
 
     return () => {
       window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', onMouseMove);
       observer.disconnect();
       cancelAnimationFrame(animationFrameId);
     };

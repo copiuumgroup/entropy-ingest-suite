@@ -157,8 +157,8 @@ app.whenReady().then(() => {
           "script-src 'self' " + (process.env.VITE_DEV_SERVER_URL ? "'unsafe-eval' " : "") + "'unsafe-inline' studio: blob:; " +
           "style-src 'self' 'unsafe-inline' studio:; " +
           "font-src 'self' studio:; " +
-          "img-src 'self' studio: data: blob:; " +
-          "media-src 'self' studio: media: blob: data:; " +
+          "img-src 'self' studio: data: blob: https:; " +
+          "media-src 'self' studio: media: blob: data: https:; " +
           "connect-src 'self' studio:;"
         ]
       }

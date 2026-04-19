@@ -2,7 +2,6 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAudioEngine } from './hooks/useAudioEngine';
 const HomeView = lazy(() => import('./views/HomeView'));
 const MediaPlayerView = lazy(() => import('./views/MediaPlayerView'));
-const VaultView = lazy(() => import('./views/VaultView'));
 const StudioView = lazy(() => import('./views/StudioView'));
 const YTDLPView = lazy(() => import('./views/YTDLPView'));
 import SidebarRail from './components/SidebarRail';
@@ -395,7 +394,7 @@ function App() {
   };
 
   return (
-    <div className="w-full h-screen overflow-hidden flex transition-all duration-1000 is-windows bg-[var(--color-surface)]">
+    <div className={`w-full h-screen overflow-hidden flex transition-all duration-1000 is-windows bg-[var(--color-surface)] ${theme}`}>
       <div className="fixed top-0 left-0 w-[calc(100%-144px)] h-[38px] title-bar-drag z-[100]" />
       
       <SidebarRail 
@@ -439,15 +438,7 @@ function App() {
           {currentView === 'player' && (
             <MediaPlayerView key="player" effects={effects} setEffects={setEffects} />
           )}
-          {currentView === 'vault' && (
-            <VaultView 
-              key="vault"
-              onUpload={handleFileUpload} 
-              onOpenProject={openProject} 
-              onDeleteProject={async (id) => await db.projects.delete(id)} 
-            />
-          )}
-          {currentView === 'studio' && activeTrack && (
+          {(currentView === 'studio' || currentView === 'vault') && (
             <StudioView 
               key="studio"
               track={activeTrack}
@@ -471,6 +462,9 @@ function App() {
               hardwareMetrics={hardwareMetrics}
               onEject={() => setActiveTrackId(null)}
               setTracks={setTracks}
+              onOpenProject={openProject}
+              onUpload={handleFileUpload}
+              onDeleteProject={async (id) => await db.projects.delete(id)}
             />
           )}
           {currentView === 'yt-dlp' && (

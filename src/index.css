@@ -24,33 +24,29 @@
   --radius-5xl: var(--radius-container);
 }
 
-/* ── MIDNIGHT / "LIGHT" (Midnight Dark - Gradient) ──────── */
+/* ── LIGHT / WHITE (True Opposite of OLED) ──────── */
 .light {
-  --color-primary: #f0f0f0;
-  --color-primary-rgb: 240, 240, 240;
-  --color-on-primary: #000000;
+  --color-primary: #000000;
+  --color-primary-rgb: 0, 0, 0;
+  --color-on-primary: #ffffff;
   
-  /* Deep Slate Charcoal base */
-  --color-surface: #1a1c1e;
-  --color-surface-rgb: 26, 28, 30;
-  --color-on-surface: #ffffff;      
+  --color-surface: #ffffff;
+  --color-surface-rgb: 255, 255, 255;
+  --color-on-surface: #000000;      
   
-  /* Softer surfaces for gradients */
-  --color-surface-variant: #25272a;
-  --color-on-surface-variant: rgba(255, 255, 255, 0.8);
+  --color-surface-variant: #f5f5f5;
+  --color-on-surface-variant: rgba(0, 0, 0, 0.8);
 
-  --color-outline: rgba(255, 255, 255, 0.12);
+  --color-outline: rgba(0, 0, 0, 0.12);
 }
 
-/* --- Gradient Logic for Midnight Mode --- */
 .light body {
-  background: linear-gradient(135deg, #1a1c1e 0%, #0f1012 100%) !important;
-  background-attachment: fixed;
+  background: #ffffff !important;
 }
 
 .light .suite-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
-  @apply backdrop-blur-xl border-white/5;
+  background: #fcfcfc;
+  @apply border-black/5;
 }
 
 /* ── Universal Forced Readability ── */
@@ -58,19 +54,21 @@
   color-scheme: dark;
 }
 
-/* Ensure all text is white in both dark modes */
-.text-on-surface-variant, .text-muted, .opacity-60, .opacity-40 {
-  @apply !text-white;
+/* Ensure text is absolute white in Dark and absolute black in Light */
+.text-on-surface-variant, .text-muted, .opacity-70, .opacity-60, .opacity-50, .opacity-40, .opacity-30, .opacity-20, .opacity-10 {
+  color: var(--color-on-surface) !important;
+  opacity: 1 !important;
 }
 
-:root:not(.light) .opacity-10  { opacity: 0.25; }
-:root:not(.light) .opacity-20  { opacity: 0.42; }
-:root:not(.light) .opacity-30  { opacity: 0.58; }
-:root:not(.light) .opacity-40  { opacity: 0.72; }
-:root:not(.light) .opacity-60  { opacity: 0.85; }
+/* Secondary/Tertiary text can have a very slight hint, but keep it highly readable */
+.text-dim {
+  color: var(--color-on-surface);
+  opacity: 0.7;
+}
 
-/* In Midnight mode, allow slightly softer opacities for the gradient feel */
-.light .opacity-40 { opacity: 0.5 !important; }
+.light .text-dim {
+  opacity: 0.65;
+}
 
 @layer base {
   * {
@@ -177,3 +175,4 @@
   writing-mode: vertical-rl;
   text-orientation: mixed;
 }
+
