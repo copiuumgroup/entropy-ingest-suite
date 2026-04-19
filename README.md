@@ -1,7 +1,7 @@
-# 💎 Material Suite
+# 🔳 Monolith Slab: Material Suite
 **The Definitive Native-First Audio Mastering Studio by copiuum group.**
 
-Material Suite is a high-performance, local-first audio environment designed for professional Windows mastering. It combines modern Material Design 3 aesthetics with a professional-grade DSP engine, providing a robust suite for "Slowed + Reverb", "Nightcore", and high-fidelity mastering.
+Material Suite is a high-performance, local-first audio environment designed exclusively for professional Windows mastering. It combines modern Material Design 3 aesthetics with the **Monolith Slab** identity—a sharp, high-contrast design system optimized for absolute focus and performance.
 
 ---
 
@@ -9,53 +9,43 @@ Material Suite is a high-performance, local-first audio environment designed for
 **This project was built with significant assistance from advanced AI agents (copiuum group).** 
 While the codebase is hardened and production-ready, it utilizes highly specialized, native-first architecture that prioritizes AI-driven design patterns and direct system integration.
 
-## ⚠️ Targeting & Compatibility
-This application is strictly optimized for **Industrial & Enterprise Windows environments**. Compatibility is only guaranteed for:
--   **Windows 10 21H2+ IoT Enterprise LTSC**
--   **Windows 11 22H2+ IoT Enterprise LTSC**
+## ⚠️ Platform & Compatibility
+Material Suite is **Strictly Windows-Only**. Cross-platform support is currently not a project goal.
+For maximum stability, performance, and UI fidelity, we advise running the suite on:
+-   **Windows 10/11 IoT Enterprise LTSC** (Recommended for absolute stability)
+-   **Windows 11 22H2+ Pro/Enterprise**
 
-*The app utilizes native Windows 11 Mica material and Title Bar Overlays. Transparency is disabled in the core to ensure 100% reliability for Windows Snap Layouts and Snap Assist.*
+*The app utilizes native Windows 11 Mica material and Title Bar Overlays. Transparency is handled via the native DWM (Desktop Window Manager) to ensure 100% reliability for Windows Snap Layouts and local hardware acceleration.*
 
 ---
 
 ## ✨ Key Features
 
-### 🎨 Duo-Design System
-- **Material 3 (Android 16 style)**: Vibrant, glassmorphic, and dynamic design for a modern creative experience.
-- **Metro Modern UI (Windows 8.1)**: A high-velocity, monolithic monochrome mode with sharp corners and cubic-bezier (snappy) animations, optimized for distraction-free mastering.
+### 🔳 Monolith Slab Design System
+- **Absolute Contrast**: A forced high-contrast system ensuring 100% readability across OLED Dark and Studio Light modes.
+- **Minimalist Geometry**: Sharp corners, cubic-bezier (snappy) animations, and custom geometric "Slab" iconography.
+- **Dynamic Starfield**: A hardware-accelerated particle system that reacts to mouse movement and theme shifts.
 
-### 🎛️ Professional Mastering Chain (V3 Engine)
-- **3-Way Multi-Band Compressor**: A high-fidelity crossover matrix that splits audio into Lows (< 250Hz), Mids (250Hz - 4kHz), and Highs (> 4kHz) for surgical dynamic control.
-- **Auto-EQ (Algorithmic)**: Analyzes track frequency response and suggests corrective curves (Sub, Bass, Mid, Treble, Air).
-- **Slowed + Reverb**: Professional IR-convolution reverb with a custom Impulse Vault and high-precision speed stretching.
-- **Nightcore**: High-speed resampling with frequency preservation and "Hyper-pop" aesthetic.
-- **Flawless Seek Sync**: Physically decoupled 'Real World Time' and 'Buffer Time' ensures perfect scrubbing even during heavy speed/pitch manipulation.
+### 🎛️ Unified Studio Workspace
+- **Consolidated Architecture**: The Studio and Vault have been merged into a single, high-velocity interface for seamless mastering and project management.
+- **3-Way Multi-Band Compressor**: A high-fidelity crossover matrix for surgical dynamic control.
+- **Auto-EQ (Algorithmic)**: Analyzes track frequency response and suggests corrective curves.
+- **Slowed + Reverb & Nightcore**: Professional resamplers and IR-convolution engines for aesthetic audio manipulation.
 
-### 🎥 Live Media Player (Native DSP Streaming)
-- **Zero-RAM Decoder**: Utilizes `MediaElementAudioSourceNode` to stream massive 4K video and audio directly into the mastering engine without memory-heavy buffering.
-- **Native Pitch-Shift (Resampling)**: Dynamically binds the Speed/Pitch matrix using the Chromium hardware-accelerated resampler for zero-latency Nightcore/Slowed effects.
-- **Local Folder Armed**: Direct integration with the Windows File System via the `webkitdirectory` API—load and shuffle through thousands of local MP4s/MP3s with ease.
-- **True Shuffle & Repeat**: Implemented Fisher-Yates shuffle algorithms and advanced transport logic for high-fidelity playback management.
-
-### 📹 High-Performance Video Export
-- **FFmpeg WASM Integration**: Native browser-based video multiplexing (H.264 / AAC) at 320kbps.
-- **Variable FPS Control**: Toggle between 24 (Cinematic/Fast), 30 (Standard), and 60 (Smooth) FPS to optimize render speed vs. visual fluidity.
-- **Dynamic Canvas Thumbnails**: Automated typographical plate generation for tracks missing ID3 cover art—incorporating titles and effects directly into the video stream.
-
-### 📥 YT-DLP Ingestion Suite (Hardened)
-- **Batch Unpacking**: Directly ingest entire SoundCloud profiles, YouTube playlists, or albums into a staging area.
-- **Session Manager**: Unified logging feed and real-time metadata parsing with multi-line JSON support.
-- **Target Vault Node**: Native folder picker integration allowing you to route high-quality ingests to any project directory.
+### 📥 yt-dlp Engine (Native discovery)
+- **Global Search**: Search terms directly on YouTube and SoundCloud without leaving the app.
+- **Batch Link Importer**: Directly ingest entire playlists, albums, or multiple URLs into a staging area.
+- **Download Queue**: A dedicated local production queue for managing high-quality 320kbps audio imports.
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
--   **Deno v2.1+**
+-   **Node.js / npm** (Current build pipeline)
 -   **yt-dlp** (Must be in your system PATH)
--   **ffmpeg** (Required for high-fidelity audio extraction and native rendering fallback)
--   **Windows 10/11 LTSC** (Recommended)
+-   **ffmpeg** (Required for high-fidelity audio extraction)
+-   **Windows IoT Enterprise LTSC** (Highly Recommended)
 
 ### Installation
 ```bash
@@ -63,44 +53,29 @@ This application is strictly optimized for **Industrial & Enterprise Windows env
 git clone https://github.com/copiuumgroup/material-suite.git
 
 # Install dependencies
-deno install
+npm install
 
 # Run in Development Mode
-deno task dev
+npm run dev
 ```
 
 ### Building for Production
 ```bash
 # Generate a portable standalone .exe
-deno task package
+npm run package
 ```
 
 ---
 
 ## 🛠️ Technology Stack
-- **Core**: Electron, React 19, TypeScript 6.0, Deno 2
+- **Core**: Electron, React 19, TypeScript 6.0, Vite 8
 - **DSP**: Web Audio API (AudioContext & 32-bit Float Offline Rendering)
 - **Video**: FFmpeg WebAssembly (v0.12+)
-- **Styling**: Tailwind CSS v4, Lucide Icons, Framer Motion (Cubic Bézier velocity)
-- **Ingestion**: Hardened `yt-dlp` Native Process Management
+- **Styling**: Vanilla CSS (Tailwind CSS v4 Fallback), Framer Motion (Cubic Bézier velocity)
+- **Discovery**: Native `yt-dlp` Process Management & Metadata Extraction
 - **Storage**: Dexie.js (IndexedDB) with native FS-Metadata caching
-- **Integration**: Microsoft Mica / Native Windows Controls Overlay (WCO)
+- **Branding**: Proprietary Monolith Slab SVG Identity System
 
 ---
 
-## 📊 Project Statistics (Language Breakdown)
-Analyzing the core repository (excluding `node_modules` and build dist):
-
-| Category | File Type | Count | Total Lines |
-| :--- | :--- | :--- | :--- |
-| **UI & Components** | `.tsx` (React) | 19 | **3,016** |
-| **Logic & Engine** | `.ts` (TypeScript) | 19 | **2,526** |
-| **Build & Scripts** | `.js`/`.json` | 6 | **289** |
-| **Design System** | `.css` (Tailwind) | 1 | **133** |
-| **DSP Engine** | `.py` (Python) | 2 | **113** |
-
-**Total:** ~6,077 Lines of Code
-
----
-
-**Material Suite** is the intellectual property of **copiuum group**, a collective of multiple individuals behind the name. All rights reserved. 🚀💎
+**Material Suite** is the intellectual property of **copiuum group**, a collective of multiple individuals behind the name. All rights reserved. 🚀🔳
