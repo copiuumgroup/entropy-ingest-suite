@@ -33,6 +33,8 @@ interface Props {
   onIRDelete: (id: number) => void;
   hardwareMetrics: { cpuPercent: number; memoryWorkingSetMB: number; memoryPrivateMB: number } | null;
   onEject: () => void;
+  onChop: (size: number) => void;
+  onTapeStop: () => void;
   setTracks: React.Dispatch<React.SetStateAction<Track[]>>;
   onOpenProject: (project: ProjectMetadata) => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -56,6 +58,8 @@ const StudioView: React.FC<Props> = ({
   onIRDelete,
   hardwareMetrics,
   onEject,
+  onChop,
+  onTapeStop,
   setTracks,
   onOpenProject,
   onUpload,
@@ -137,11 +141,14 @@ const StudioView: React.FC<Props> = ({
                   </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
-                  {library?.map((proj) => (
-                      <div 
+                  {library?.map((proj, i) => (
+                      <motion.div 
                         key={proj.id} 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 30 }}
                         onClick={() => onOpenProject(proj)}
-                        className="p-3 border border-[var(--color-outline)] rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer hover:bg-[var(--color-primary)]/5 transition-all group"
+                        className="p-3 border border-[var(--color-outline)] rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer hover:bg-[var(--color-primary)]/5 transition-all group active:scale-[0.98]"
                       >
                           <div className="w-10 h-10 rounded-sm bg-[var(--color-surface-variant)] flex items-center justify-center shrink-0 overflow-hidden">
                               {proj.coverArt ? <img src={proj.coverArt} className="w-full h-full object-cover" /> : <Music className="w-4 h-4 opacity-20" />}
@@ -156,7 +163,7 @@ const StudioView: React.FC<Props> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                      </div>
+                      </motion.div>
                   ))}
                   {(!library || library.length === 0) && (
                       <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center px-6">
@@ -204,12 +211,15 @@ const StudioView: React.FC<Props> = ({
               </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
-              {library?.map((proj) => (
-                  <div 
+              {library?.map((proj, i) => (
+                  <motion.div 
                     key={proj.id} 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05, type: 'spring', stiffness: 400, damping: 30 }}
                     onClick={() => onOpenProject(proj)}
                     className={cn(
-                      "p-3 border rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer transition-all group",
+                      "p-3 border rounded-[var(--radius-element)] flex items-center gap-3 cursor-pointer transition-all group active:scale-[0.98]",
                       track.metadata?.title === proj.name ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/40 shadow-lg" : "border-[var(--color-outline)] hover:bg-[var(--color-primary)]/5"
                     )}
                   >
@@ -226,7 +236,7 @@ const StudioView: React.FC<Props> = ({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                  </div>
+                  </motion.div>
               ))}
           </div>
       </div>
@@ -460,6 +470,44 @@ const StudioView: React.FC<Props> = ({
                             disabled={!track?.stems}
                             onChange={(v) => setEffects({ ...effects, vocalTone: v })}
                           />
+
+                          <div className="col-span-2 h-px bg-[var(--color-outline)] my-2 opacity-20" />
+                          
+                          {/* Phase 9: Houston Deck */}
+                          <div className="col-span-2 space-y-4">
+                              <div className="flex items-center justify-between">
+                                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)]">Houston Deck</h4>
+                                  <button 
+                                    onClick={() => setEffects({ ...effects, coupledPitch: !effects.coupledPitch })}
+                                    className={cn("px-3 py-1 text-[7px] font-black uppercase tracking-widest border rounded-full transition-all", effects.coupledPitch ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)]" : "opacity-30 border-[var(--color-outline)]")}
+                                  >
+                                    {effects.coupledPitch ? "Vinyl Mode" : "Digital Pitch"}
+                                  </button>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                  {[0.1, 0.25, 0.5].map((size) => (
+                                      <button 
+                                        key={size}
+                                        onClick={() => onChop(size)}
+                                        className="py-3 border border-[var(--color-outline)] hover:bg-[var(--color-primary)]/10 hover:border-[var(--color-primary)]/40 transition-all rounded-[var(--radius-element)] flex flex-col items-center justify-center gap-1 group active:scale-95"
+                                      >
+                                          <span className="text-[9px] font-black uppercase">CHOP</span>
+                                          <span className="text-[7px] font-bold opacity-30 group-hover:opacity-100">{size}s</span>
+                                      </button>
+                                  ))}
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                  <button 
+                                    onClick={onTapeStop}
+                                    className="w-full py-2 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-500 text-[9px] font-black uppercase tracking-[0.2em] transition-all rounded-[var(--radius-element)] shadow-lg shadow-rose-500/5 active:scale-95"
+                                  >
+                                    Tape Stop Dive
+                                  </button>
+                              </div>
+                              <p className="text-[7px] font-bold uppercase tracking-widest opacity-20 leading-relaxed">
+                                  Rhythmic Stutter Engine: Performs a real-time buffer jump and repeat.
+                              </p>
+                          </div>
                       </div>
                   </div>
 

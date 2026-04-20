@@ -14,6 +14,8 @@ interface Props {
     release: number;
   };
   setLimiter: (settings: { threshold: number; ratio: number; attack: number; release: number }) => void;
+  proxy: string;
+  setProxy: (proxy: string) => void;
 }
 
 export const SettingsModal: React.FC<Props> = ({ 
@@ -22,7 +24,9 @@ export const SettingsModal: React.FC<Props> = ({
   theme, 
   setTheme, 
   limiter,
-  setLimiter
+  setLimiter,
+  proxy,
+  setProxy
 }) => {
   const updateLimiter = (key: string, val: number) => {
     setLimiter({ ...limiter, [key]: val });
@@ -116,6 +120,35 @@ export const SettingsModal: React.FC<Props> = ({
                     />
                   </div>
                 </div>
+              </section>
+
+              {/* Regional Bypass Section */}
+              <section className="space-y-6">
+                 <h3 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-30 flex items-center gap-2">
+                    Regional Ingest Bypass
+                 </h3>
+                 <div className="space-y-4">
+                    <div className="p-6 border border-[var(--color-outline)] bg-[var(--color-surface)]/20 space-y-4 rounded-[var(--radius-container)]">
+                        <div className="flex flex-col gap-1">
+                            <p className="text-xs font-black uppercase">Global Proxy Node</p>
+                            <p className="text-[9px] opacity-40 uppercase tracking-widest font-bold">Use this to bypass SoundCloud or YouTube region blocks (e.g. Latvia).</p>
+                        </div>
+                        <input 
+                            type="text"
+                            value={proxy}
+                            onChange={(e) => setProxy(e.target.value)}
+                            placeholder="http://user:pass@host:port or socks5://..."
+                            className="w-full bg-black/40 border border-[var(--color-outline)] p-4 rounded-[var(--radius-element)] text-xs font-mono focus:border-[var(--color-primary)] outline-none transition-all"
+                        />
+                        <div className="flex items-start gap-2 opacity-30 group">
+                            <div className="w-1 h-1 rounded-full bg-[var(--color-primary)] mt-1.5" />
+                            <p className="text-[8px] uppercase tracking-widest font-bold leading-relaxed">
+                                Security Note: Proxy credentials are masked via Environment Variables. 
+                                However, the proxy provider can still see your traffic. Use trusted nodes.
+                            </p>
+                        </div>
+                    </div>
+                 </div>
               </section>
 
               {/* Database Section */}

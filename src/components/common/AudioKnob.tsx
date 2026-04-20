@@ -62,14 +62,17 @@ export const AudioKnob: React.FC<Props> = ({
         {label}
       </span>
 
-      <div
+      <motion.div
         ref={knobRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onDoubleClick={handleDoubleClick}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.98 }}
         className={cn(
-          "relative w-14 h-14 cursor-ns-resize flex items-center justify-center transition-all duration-300 suite-glass-subtle rounded-full shadow-lg",
+          "relative w-14 h-14 cursor-ns-resize flex items-center justify-center suite-glass-subtle rounded-full shadow-lg transition-colors duration-200",
+          isDragging && "border-[var(--color-primary)]/40 shadow-[0_0_20px_rgba(var(--color-primary-rgb),0.2)]",
           disabled && "opacity-20 grayscale pointer-events-none"
         )}
       >
@@ -87,6 +90,8 @@ export const AudioKnob: React.FC<Props> = ({
 
         <motion.div 
             style={{ rotate: rotation }}
+            animate={{ rotate: rotation }}
+            transition={isDragging ? { type: 'tween', duration: 0 } : { type: 'spring', stiffness: 300, damping: 20 }}
             className={cn(
                 "absolute inset-0 flex items-center justify-center",
                 isDragging ? "opacity-100 drop-shadow-[0_0_4px_var(--color-primary)]" : "opacity-100"
@@ -98,7 +103,7 @@ export const AudioKnob: React.FC<Props> = ({
         <div className="absolute w-8 h-8 rounded-full flex items-center justify-center bg-[var(--color-surface-variant)] border border-[var(--color-outline)] shadow-xl">
              <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] opacity-40 shadow-[0_0_4px_currentColor]" />
         </div>
-      </div>
+      </motion.div>
 
       {/* Bottom Value Tooltip */}
       <div className="px-2 py-0.5 min-w-[32px] text-center suite-glass-subtle text-[9px] font-mono opacity-60 rounded-[var(--radius-element)]">

@@ -70,15 +70,24 @@ function jsonSafeParse(str: string) {
   try { return JSON.parse(str); } catch (e) { return {}; }
 }
 
+function getVaultPath() {
+  const localPath = app.getPath('userData').replace('Roaming', 'Local');
+  const vaultPath = path.join(localPath, 'vault');
+  if (!fs.existsSync(vaultPath)) fs.mkdirSync(vaultPath, { recursive: true });
+  return vaultPath;
+}
+
 function isPathSafe(filePath: string) {
   try {
     const musicPath = path.resolve(app.getPath('music'));
     const userDataPath = path.resolve(app.getPath('userData'));
+    const localDataPath = path.resolve(getVaultPath());
     const tempPath = path.resolve(os.tmpdir());
     const resolvedPath = path.resolve(filePath);
     return resolvedPath.startsWith(musicPath)
-        || resolvedPath.startsWith(userDataPath)
-        || resolvedPath.startsWith(tempPath);
+      || resolvedPath.startsWith(userDataPath)
+      || resolvedPath.startsWith(localDataPath)
+      || resolvedPath.startsWith(tempPath);
   } catch (e) { return false; }
 }
 
@@ -89,7 +98,7 @@ function cleanupPartialFiles() {
     const files = fs.readdirSync(musicPath);
     files.forEach((file: string) => {
       if (file.endsWith('.part') || file.endsWith('.ytdl')) {
-        try { fs.unlinkSync(path.join(musicPath, file)); } catch (e) {}
+        try { fs.unlinkSync(path.join(musicPath, file)); } catch (e) { }
       }
     });
   } catch (e) {
@@ -184,7 +193,7 @@ app.whenReady().then(() => {
     const rawPath = request.url.replace('media://', '');
     const decodedPath = decodeURIComponent(rawPath);
     const filePath = fileURLToPath('file:///' + decodedPath);
-    
+
     if (!isPathSafe(filePath)) {
       console.warn('[SECURITY] Blocked non-safe media access:', filePath);
       return new Response('Forbidden', { status: 403 });
@@ -223,7 +232,7 @@ ipcMain.handle('update-titlebar-overlay', (_event: IpcMainInvokeEvent, settings:
 ipcMain.handle('get-engine-metrics', async () => {
   const memory = await process.getProcessMemoryInfo();
   const cpu = process.getCPUUsage();
-  
+
   return {
     memoryWorkingSetMB: Math.round(memory.residentSet / 1024),
     memoryPrivateMB: Math.round(memory.private / 1024),
@@ -249,7 +258,7 @@ ipcMain.handle('extract-audio', async (_event: IpcMainInvokeEvent, filePath: str
 
     let chunks: Buffer[] = [];
     let totalSize = 0;
-    
+
     ff.stdout.on('data', (data: Buffer) => {
       totalSize += data.length;
       if (totalSize > MAX_BUFFER_SIZE) {
@@ -292,15 +301,24 @@ ipcMain.handle('get-metadata', async (_event: IpcMainInvokeEvent, filePath: stri
 });
 
 
-ipcMain.handle('ytdlp-get-info', async (_event: IpcMainInvokeEvent, trackUrl: string) => {
+ipcMain.handle('ytdlp-get-info', async (_event: IpcMainInvokeEvent, trackUrl: string, options?: any) => {
   return new Promise((resolve) => {
+    const proxy = options?.proxy;
     // --flat-playlist gives us metadata without downloading
-    const args = ['--dump-json', '--flat-playlist', '--no-warnings', '--remote-components', 'ejs:github', '--', trackUrl];
-    const process = spawn('yt-dlp', args);
+    const args = ['--dump-json', '--flat-playlist', '--no-warnings', '--remote-components', 'ejs:github'];
+
+    args.push('--', trackUrl);
+
+    const ytdlpProcess = spawn('yt-dlp', args, {
+      env: {
+        ...process.env,
+        ...(proxy ? { ALL_PROXY: proxy, http_proxy: proxy, https_proxy: proxy } : {})
+      }
+    });
     let output = '';
-    
-    process.stdout.on('data', (data: Buffer) => { output += data.toString(); });
-    process.on('close', (code: number) => {
+
+    ytdlpProcess.stdout.on('data', (data: Buffer) => { output += data.toString(); });
+    ytdlpProcess.on('close', (code: number) => {
       if (code === 0) {
         try {
           // Playlist/Profiles return multiple lines of JSON
@@ -326,7 +344,7 @@ ipcMain.handle('ytdlp-get-info', async (_event: IpcMainInvokeEvent, trackUrl: st
         } catch (e) { resolve({ success: false, error: 'Corrupt metadata stream' }); }
       } else { resolve({ success: false, error: 'yt-dlp failed to fetch metadata' }); }
     });
-    process.on('error', (err: any) => resolve({ success: false, error: err.message }));
+    ytdlpProcess.on('error', (err: any) => resolve({ success: false, error: err.message }));
   });
 });
 
@@ -334,7 +352,7 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
   const mode = options?.mode || 'audio';
   const quality = options?.quality || 'mp3';
   const win = BrowserWindow.fromWebContents(event.sender);
-  
+
   // Security Hardening: Ensure destination path is safe
   let musicPath = options?.destinationPath || app.getPath('music');
   if (options?.destinationPath && !isPathSafe(options.destinationPath)) {
@@ -344,8 +362,9 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
   }
 
   return new Promise((resolve) => {
+    const proxy = options?.proxy;
     let args: string[] = [];
-    
+
     if (mode === 'audio') {
       args = [
         '-x', '--audio-format', quality,
@@ -370,14 +389,19 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
         trackUrl
       ];
     }
-    
-    const process = spawn('yt-dlp', args);
-    const jobId = `ytdlp-${trackUrl}-${Date.now()}`; 
-    activeProcesses.set(jobId, process);
-    
+
+    const ytdlpProcess = spawn('yt-dlp', args, {
+      env: {
+        ...process.env,
+        ...(proxy ? { ALL_PROXY: proxy, http_proxy: proxy, https_proxy: proxy } : {})
+      }
+    });
+    const jobId = `ytdlp-${trackUrl}-${Date.now()}`;
+    activeProcesses.set(jobId, ytdlpProcess);
+
     let errorLog = '';
 
-    process.on('error', (err: any) => {
+    ytdlpProcess.on('error', (err: any) => {
       activeProcesses.delete(jobId);
       const errMsg = `FATAL: Failed to launch yt-dlp. (${err.message})`;
       win?.webContents.send('ytdlp-log', errMsg);
@@ -386,23 +410,23 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
 
     const watchdog = setTimeout(() => {
       if (activeProcesses.has(jobId)) {
-        process.kill();
+        ytdlpProcess.kill();
         activeProcesses.delete(jobId);
         win?.webContents.send('ytdlp-log', 'ERROR: Process timed out after 5 minutes.');
       }
     }, 5 * 60 * 1000);
 
-    process.stdout.on('data', (data: Buffer) => {
+    ytdlpProcess.stdout.on('data', (data: Buffer) => {
       win?.webContents.send('ytdlp-log', { url: trackUrl, data: data.toString() });
     });
 
-    process.stderr.on('data', (data: Buffer) => {
+    ytdlpProcess.stderr.on('data', (data: Buffer) => {
       const msg = data.toString();
       errorLog += msg;
       win?.webContents.send('ytdlp-log', { url: trackUrl, data: msg });
     });
 
-    process.on('close', (code: number) => {
+    ytdlpProcess.on('close', (code: number) => {
       clearTimeout(watchdog);
       activeProcesses.delete(jobId);
 
@@ -411,7 +435,7 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
           const logDir = app.getPath('userData');
           const logPath = path.join(logDir, 'ytdlp_error_reports.log');
           fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Failed: ${trackUrl}\n${errorLog}\n${'-'.repeat(40)}\n`);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (code === 0) resolve({ success: true });
@@ -454,10 +478,10 @@ ipcMain.handle('check-system-binary', async () => {
 
 ipcMain.handle('purge-archives', async () => {
   try {
-    const archivesPath = path.join(app.getPath('userData'), 'archives');
-    if (fs.existsSync(archivesPath)) {
-      fs.rmSync(archivesPath, { recursive: true, force: true });
-      fs.mkdirSync(archivesPath);
+    const vaultPath = getVaultPath();
+    if (fs.existsSync(vaultPath)) {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+      fs.mkdirSync(vaultPath);
     }
     return true;
   } catch (e) {
@@ -492,9 +516,8 @@ ipcMain.handle('read-file', async (_event: IpcMainInvokeEvent, filePath: string)
 
 ipcMain.handle('cache-audio-file', async (_event: IpcMainInvokeEvent, sourcePath: string | null, fileName: string, buffer?: any) => {
   try {
-    const archivesPath = path.join(app.getPath('userData'), 'archives');
-    if (!fs.existsSync(archivesPath)) fs.mkdirSync(archivesPath, { recursive: true });
-    
+    const vaultPath = getVaultPath();
+
     let fileSize = 0;
     if (sourcePath && fs.existsSync(sourcePath)) {
       fileSize = fs.statSync(sourcePath).size;
@@ -504,7 +527,7 @@ ipcMain.handle('cache-audio-file', async (_event: IpcMainInvokeEvent, sourcePath
 
     const safeName = fileName.replace(/[\\/:*?"<>|]/g, '');
     const vaultName = `${fileSize}-${safeName}`;
-    const targetPath = path.join(archivesPath, vaultName);
+    const targetPath = path.join(vaultPath, vaultName);
 
     if (fs.existsSync(targetPath)) return targetPath;
 
@@ -515,7 +538,7 @@ ipcMain.handle('cache-audio-file', async (_event: IpcMainInvokeEvent, sourcePath
     } else {
       return null;
     }
-    
+
     return targetPath;
   } catch (e) {
     return null;

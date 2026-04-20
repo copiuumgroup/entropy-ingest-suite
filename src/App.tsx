@@ -27,8 +27,8 @@ declare global {
       getMetadata: (path: string) => Promise<{ title?: string; artist?: string; album?: string; coverArt?: string } | null>;
       saveFile: (fileName: string, buffer: ArrayBuffer) => Promise<string>;
       selectDownloadDirectory: () => Promise<string | null>;
-      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video'; destinationPath?: string }) => Promise<{ success: boolean; error?: string }>;
-      ytdlpGetInfo: (url: string) => Promise<{ success: boolean; info?: any; infos?: any[]; error?: string }>;
+      ytdlpDownload: (url: string, options?: { quality?: 'mp3' | 'wav'; mode?: 'audio' | 'video'; destinationPath?: string; proxy?: string }) => Promise<{ success: boolean; error?: string }>;
+      ytdlpGetInfo: (url: string, options?: { proxy?: string }) => Promise<{ success: boolean; info?: any; infos?: any[]; error?: string }>;
       ytdlpCancel: () => Promise<boolean>;
       openMusicFolder: () => Promise<boolean>;
       openAppDataFolder: () => Promise<boolean>;
@@ -65,6 +65,7 @@ function App() {
     attack: 0.001,    // 1ms fast attack
     release: 0.1      // 100ms release
   });
+  const [proxy, setProxy] = useState(() => localStorage.getItem('studio-proxy') || '');
 
   // Sync Limiter Settings to Effects
   useEffect(() => {
@@ -75,6 +76,10 @@ function App() {
     localStorage.setItem('studio-theme', theme);
     document.documentElement.className = theme;
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem('studio-proxy', proxy);
+  }, [proxy]);
 
   const [currentView, setCurrentView] = useState<ViewType>('home');
   const [isPlayerDismissed, setIsPlayerDismissed] = useState(false);
@@ -113,6 +118,9 @@ function App() {
     irId: undefined,
     reverbRoomSize: 1.0,
     customIRBuffer: null,
+    isChopped: false,
+    coupledPitch: true,
+    chopSize: 0.5
   });
 
   const [hardwareMetrics, setHardwareMetrics] = useState<{ cpuPercent: number; memoryWorkingSetMB: number; memoryPrivateMB: number } | null>(null);
@@ -448,6 +456,8 @@ function App() {
         setTheme={setTheme}
         limiter={limiterSettings}
         setLimiter={setLimiterSettings}
+        proxy={proxy}
+        setProxy={setProxy}
       />
 
       {/* Main Content Area */}
@@ -462,10 +472,10 @@ function App() {
          }>
           <motion.div
             key={currentView}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="w-full h-full flex flex-col"
           >
           {currentView === 'home' && (
@@ -496,7 +506,12 @@ function App() {
                   if (effects.irId === id) selectImpulse(null);
               }}
               hardwareMetrics={hardwareMetrics}
-              onEject={() => setActiveTrackId(null)}
+              onChop={(size) => studioEngine.chop(currentTime, size)}
+              onTapeStop={() => studioEngine.tapeStop(1.5)}
+              onEject={() => {
+                  setIsPlaying(false);
+                  setActiveTrackId(null);
+              }}
               setTracks={setTracks}
               onOpenProject={openProject}
               onUpload={handleFileUpload}

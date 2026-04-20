@@ -47,33 +47,40 @@ const SidebarRail: React.FC<Props> = ({
         {items.map((item) => {
           const isActive = currentView === item.id;
           return (
-            <button
+            <motion.button
               key={item.id}
               onClick={() => setView(item.id)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               className={cn(
-                "group relative w-14 h-14 transition-all duration-300 flex items-center justify-center rounded-[var(--radius-element)]",
+                "group relative w-14 h-14 flex items-center justify-center rounded-[var(--radius-element)] transition-colors duration-200",
                 isActive 
                     ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-lg" 
                     : "hover:bg-[var(--color-primary)]/10 opacity-40 hover:opacity-100"
               )}
             >
               <item.icon className={cn(
-                  "w-6 h-6", 
+                  "w-6 h-6 transition-transform duration-300", 
                   isActive ? "scale-110" : "scale-100"
               )} />
               
               {/* Tooltip */}
-              <div className="absolute left-20 px-4 py-2 text-[var(--color-on-surface)] text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 pointer-events-none transition-all whitespace-nowrap z-[100] suite-glass-subtle rounded-[var(--radius-element)] shadow-2xl border border-[var(--color-outline)]">
+              <motion.div 
+                initial={{ opacity: 0, x: -10, scale: 0.9 }}
+                whileHover={{ opacity: 1, x: 0, scale: 1 }}
+                className="absolute left-20 px-4 py-2 text-[var(--color-on-surface)] text-[10px] font-black uppercase tracking-widest pointer-events-none transition-all whitespace-nowrap z-[100] suite-glass-subtle rounded-[var(--radius-element)] shadow-2xl border border-[var(--color-outline)] opacity-0 group-hover:opacity-100"
+              >
                   {item.label}
-              </div>
+              </motion.div>
 
               {isActive && (
                 <motion.div 
                     layoutId="active-indicator"
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                     className="absolute -left-1 w-1 h-8 bg-[var(--color-primary)] rounded-r-full"
                 />
               )}
-            </button>
+            </motion.button>
           );
         })}
       </div>

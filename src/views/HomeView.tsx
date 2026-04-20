@@ -60,14 +60,21 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
         {cards.map((card, idx) => (
           <motion.div
             key={card.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 + idx * 0.1 }}
+            initial={{ opacity: 0, y: 30, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ 
+              delay: 0.2 + idx * 0.1,
+              type: 'spring',
+              stiffness: 260,
+              damping: 20
+            }}
           >
-            <button
+            <motion.button
               onClick={card.action}
               disabled={!card.available}
-              className={`w-full text-left p-8 suite-glass-deep border border-[var(--color-outline)] rounded-[var(--radius-container)] group transition-all duration-300 flex flex-col h-full relative overflow-hidden focus:outline-none ${card.available ? 'hover:bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/40 hover:-translate-y-1 hover:shadow-2xl' : 'opacity-40 cursor-not-allowed'
+              whileHover={{ scale: 1.02, y: -4 }}
+              whileTap={{ scale: 0.98 }}
+              className={`w-full text-left p-8 suite-glass-deep border border-[var(--color-outline)] rounded-[var(--radius-container)] group transition-colors duration-300 flex flex-col h-full relative overflow-hidden focus:outline-none ${card.available ? 'hover:bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/40 hover:shadow-2xl' : 'opacity-40 cursor-not-allowed'
                 }`}
             >
               {/* Subtle background glow effect on hover */}
@@ -93,7 +100,7 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
                   {card.description}
                 </p>
               </div>
-            </button>
+            </motion.button>
           </motion.div>
         ))}
       </div>

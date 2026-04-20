@@ -75,8 +75,9 @@ const YTDLPView: React.FC = () => {
     setIsSearching(true);
     setSearchResults([]);
     
+    const proxy = localStorage.getItem('studio-proxy') || undefined;
     const prefix = searchProvider === 'youtube' ? 'ytsearch20:' : 'scsearch20:';
-    const res = await window.electronAPI.ytdlpGetInfo(`${prefix}${searchQuery}`);
+    const res = await window.electronAPI.ytdlpGetInfo(`${prefix}${searchQuery}`, { proxy });
     if (res.success && res.infos) {
       const results = res.infos.map((info: any) => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -106,8 +107,9 @@ const YTDLPView: React.FC = () => {
     
     for (const url of urls) {
       if (window.electronAPI) {
+        const proxy = localStorage.getItem('studio-proxy') || undefined;
         setStatusMessage(`Analyzing: ${url.substring(0, 30)}...`);
-      const res = await window.electronAPI.ytdlpGetInfo(url);
+      const res = await window.electronAPI.ytdlpGetInfo(url, { proxy });
       if (res.success && res.infos) {
         const newStaged: StagedItem[] = res.infos.map((info: any) => ({
            id: Math.random().toString(36).substr(2, 9),
@@ -154,10 +156,12 @@ const YTDLPView: React.FC = () => {
         await db.downloadQueue.update(item.id, { status: 'processing' });
 
         try {
+            const proxy = localStorage.getItem('studio-proxy') || undefined;
             if (!window.electronAPI) throw new Error("Native Bridge Offline");
             const res = await window.electronAPI.ytdlpDownload(item.url, { 
                 mode: ingestMode,
-                destinationPath: targetDirectory
+                destinationPath: targetDirectory,
+                proxy
             });
             if (!res.success) throw new Error(res.error);
             await db.downloadQueue.update(item.id, { status: 'success' });

@@ -22,6 +22,12 @@
   --radius-element: 6px;
   --radius-4xl: var(--radius-container);
   --radius-5xl: var(--radius-container);
+
+  /* Animation Tokens - Responsive & Snappy */
+  --ease-snappy: cubic-bezier(0.2, 1, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
 }
 
 /* ── LIGHT / WHITE (True Opposite of OLED) ──────── */
@@ -83,11 +89,17 @@
 
 @layer components {
   .suite-card {
-    @apply bg-[var(--color-surface-variant)] rounded-[var(--radius-container)] border border-[var(--color-outline)] transition-all duration-300;
+    @apply bg-[var(--color-surface-variant)] rounded-[var(--radius-container)] border border-[var(--color-outline)];
+    transition: transform var(--duration-normal) var(--ease-snappy), opacity var(--duration-normal) var(--ease-snappy), border-color var(--duration-normal) var(--ease-snappy);
   }
 
   .suite-button {
-    @apply px-6 py-2.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[10px] transition-all duration-150 active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2;
+    @apply px-6 py-2.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[10px] disabled:opacity-40 flex items-center justify-center gap-2;
+    transition: transform var(--duration-fast) var(--ease-snappy), opacity var(--duration-fast) var(--ease-snappy), background-color var(--duration-fast) var(--ease-snappy);
+  }
+  
+  .suite-button:active {
+    transform: scale(0.96);
   }
 
   .suite-button-primary {
@@ -95,23 +107,36 @@
   }
 
   .suite-button-outline {
-    @apply border border-[var(--color-outline)] hover:bg-[var(--color-on-surface)] hover:text-[var(--color-surface)];
+    @apply border border-[var(--color-outline)];
+    transition: all var(--duration-fast) var(--ease-snappy);
+  }
+  
+  .suite-button-outline:hover {
+    @apply bg-[var(--color-on-surface)] text-[var(--color-surface)];
   }
 
   .suite-button-ghost {
-    @apply px-3 py-1.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[9px] transition-all duration-150 active:scale-95 flex items-center gap-1.5;
+    @apply px-3 py-1.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[9px] flex items-center gap-1.5;
+    transition: transform var(--duration-fast) var(--ease-snappy), opacity var(--duration-fast) var(--ease-snappy), background-color var(--duration-fast) var(--ease-snappy);
+  }
+  
+  .suite-button-ghost:active {
+    transform: scale(0.96);
   }
 
   .suite-input {
-    @apply bg-[var(--color-surface-variant)] border border-[var(--color-outline)] rounded-[var(--radius-element)] px-6 py-4 text-sm focus:outline-none transition-all placeholder:opacity-50;
+    @apply bg-[var(--color-surface-variant)] border border-[var(--color-outline)] rounded-[var(--radius-element)] px-6 py-4 text-sm focus:outline-none placeholder:opacity-50;
+    transition: border-color var(--duration-fast) var(--ease-snappy), box-shadow var(--duration-fast) var(--ease-snappy);
   }
 
   .suite-input:focus {
     border-color: rgba(var(--color-primary-rgb), 0.5);
+    box-shadow: 0 0 0 1px rgba(var(--color-primary-rgb), 0.1);
   }
 
   .suite-chip {
     @apply px-4 py-1.5 rounded-[var(--radius-element)] bg-[var(--color-outline)] text-[10px] font-bold uppercase tracking-wider;
+    transition: transform var(--duration-fast) var(--ease-snappy);
   }
 
   /* ── Glassmorphism ── */
@@ -142,7 +167,7 @@
 
 /* Standardized Transitions */
 .transition-studio {
-  transition: all 150ms cubic-bezier(0.1, 0.9, 0.2, 1);
+  transition: all var(--duration-normal) var(--ease-snappy);
 }
 
 /* Scrollbar */

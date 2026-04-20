@@ -19,6 +19,11 @@ export interface StudioEffects {
   isVocalReduced: boolean; // Legacy but used for UI state
   irId?: number; // DB persistence
   
+  // Phase 9: Chopped & Screwed (Houston Legacy)
+  isChopped: boolean;
+  coupledPitch: boolean; // If true, pitch follows speed (Vinyl/Screw style)
+  chopSize: number; // 1/4, 1/2, etc.
+  
   // Phase 7: Spatial Audio (3D Matrix)
   isSpatialEnabled: boolean;
   spatialVocal: { x: number; y: number; z: number };
@@ -281,6 +286,9 @@ class StudioEngine {
           
           this.vocalSource.playbackRate.value = effects.speed;
           this.instrumentalSource.playbackRate.value = effects.speed;
+
+          // Note: Web Audio's playbackRate natively couples pitch and speed.
+          // In the future, if we add Time-Stretching, coupledPitch will toggle it.
           
           this.vocalSource.start(0, offset);
           this.instrumentalSource.start(0, offset);
@@ -297,6 +305,66 @@ class StudioEngine {
           }
           this.source.start(0, offset);
       }
+  }
+
+  /**
+   * Phase 9: The Chop (Houston Protocol)
+   * Stutters the audio by jumping back and repeating a segment.
+   */
+  public chop(currentOffset: number, sizeSeconds: number) {
+      if (!this.ctx || !this.activeBuffer || !this.source) return;
+      
+      const playbackRate = this.source.playbackRate.value;
+      
+      // Stop the current primary source
+      this.stop();
+      
+      // Calculate the 'Screw' jump (compensating for playback speed)
+      const jumpAmount = sizeSeconds * playbackRate;
+      const jumpPoint = Math.max(0, currentOffset - jumpAmount);
+      
+      // Immediately restart at the jump point to create the 'Chop'
+      this.play(jumpPoint, {
+          speed: playbackRate,
+          reverbWet: 0, // Options can be passed here or pulled from state
+          saturation: 0,
+          stereoWidth: 100,
+          tapeWow: 0,
+          tapeFlutter: 0,
+          vocalPitch: 0,
+          vocalTone: 0,
+          isAutoEQEnabled: false,
+          isMultibandEnabled: false,
+          isVocalFocusEnabled: false,
+          isNightcore: false,
+          isVocalReduced: false,
+          isSpatialEnabled: false,
+          spatialVocal: { x: 0, y: 0, z: 0 },
+          spatialInstrumental: { x: 0, y: 0, z: 0 },
+          isGPUAccelerated: false,
+          isChopped: true,
+          coupledPitch: true,
+          chopSize: sizeSeconds
+      });
+  }
+
+  /**
+   * Phase 9: Tape Stop (The Abyss)
+   * Simulates the power being cut to a turntable.
+   */
+  public tapeStop(durationSeconds: number = 1.5) {
+      if (!this.ctx || !this.source) return;
+      const ctx = this.ctx;
+
+      // Ramp the playback rate down to zero
+      // We use setTargetAtTime for a more 'weighted' mechanical feel than a linear ramp
+      this.source.playbackRate.setTargetAtTime(0, ctx.currentTime, durationSeconds / 3);
+      
+      // Stop the actual source once the ramp is finished
+      setTimeout(() => {
+          this.stop();
+          studioAPI.emitStudioLog("[ENGINE] Tape Stop Protocol Complete.");
+      }, durationSeconds * 1000);
   }
 
   public stop() {

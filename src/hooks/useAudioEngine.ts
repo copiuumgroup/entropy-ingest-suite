@@ -33,6 +33,13 @@ export function useAudioEngine(
             setGenre(res.genreHint);
             if (onAnalysis) onAnalysis(res.bpm, res.genreHint, res.suggestedEQ);
         });
+    } else {
+        // Handle Ejection
+        setIsPlaying(false);
+        pausedAtRef.current = 0;
+        startedAtRef.current = 0;
+        setCurrentTime(0);
+        studioEngine.stop();
     }
   }, [activeBuffer, stems]);
 
