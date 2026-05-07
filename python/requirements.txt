@@ -1,0 +1,4 @@
+torch
+audio-separator
+pedalboard
+soundfile

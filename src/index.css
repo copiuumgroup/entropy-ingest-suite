@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap');
 @import "tailwindcss";
 /** @tailwind base; @tailwind components; @tailwind utilities; @tailwind theme; */
 
@@ -11,46 +12,61 @@
   --color-surface-rgb: 0, 0, 0;
   --color-on-surface: #ffffff;      
   
-  /* Pure monolithic shadows & surfaces */
-  --color-surface-variant: #0c0c0c;
-  --color-on-surface-variant: rgba(255, 255, 255, 0.9);
+  /* OLED Pure - Monolithic geometry with high-definition outlines */
+  --color-surface-variant: #000000; 
+  --color-on-surface-variant: #ffffff;
   
-  --color-outline: rgba(255, 255, 255, 0.22);
+  --color-outline: rgba(255, 255, 255, 0.45);
+  --color-outline-vibrant: rgba(var(--color-primary-rgb), 0.6);
 
   /* Radius scale */
-  --radius-container: 14px;
-  --radius-element: 6px;
+  --radius-container: 16px;
+  --radius-element: 8px;
   --radius-4xl: var(--radius-container);
   --radius-5xl: var(--radius-container);
+
+  /* Spacing / Layout */
+  --suite-gutter: 40px;
+  --suite-gutter-sm: 20px;
+  --suite-sidebar-width: 80px;
+
+  /* Blur scale */
+  --glass-blur-subtle: 12px;
+  --glass-blur-deep: 40px;
 
   /* Animation Tokens - Responsive & Snappy */
   --ease-snappy: cubic-bezier(0.2, 1, 0.2, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 120ms;
   --duration-normal: 200ms;
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
 }
 
-/* ── LIGHT / WHITE (True Opposite of OLED) ──────── */
-.light {
-  --color-primary: #000000;
-  --color-primary-rgb: 0, 0, 0;
-  --color-on-primary: #ffffff;
-  
-  --color-surface: #ffffff;
-  --color-surface-rgb: 255, 255, 255;
-  --color-on-surface: #000000;      
-  
-  --color-surface-variant: #f5f5f5;
-  --color-on-surface-variant: rgba(0, 0, 0, 0.8);
-
-  --color-outline: rgba(0, 0, 0, 0.12);
+/* ── PREMIUM TEXTURES ──────── */
+.suite-noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-.light body {
-  background: #ffffff !important;
+.suite-scanline-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: 
+    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+  background-size: 100% 3px, 3px 100%;
 }
 
-.light .suite-card {
+/* ── GLOBAL SCROLLBAR OVERRIDES ──────── */
+.custom-scrollbar::-webkit-scrollbar {
   background: #fcfcfc;
   @apply border-black/5;
 }
@@ -60,16 +76,23 @@
   color-scheme: dark;
 }
 
-/* Ensure text is absolute white in Dark and absolute black in Light */
-.text-on-surface-variant, .text-muted, .opacity-70, .opacity-60, .opacity-50, .opacity-40, .opacity-30, .opacity-20, .opacity-10 {
-  color: var(--color-on-surface) !important;
-  opacity: 1 !important;
+/* 
+   High-Fidelity Text Contrast 
+   Absolute white on pure black is the priority.
+   Secondary elements maintain high-visibility.
+*/
+.text-muted, .opacity-60, .opacity-50 {
+  opacity: 0.85 !important;
 }
 
-/* Secondary/Tertiary text can have a very slight hint, but keep it highly readable */
+.text-dim, .opacity-40, .opacity-30 {
+  opacity: 0.7 !important;
+}
+
+/* Secondary/Tertiary text must be sharply distinguishable */
 .text-dim {
   color: var(--color-on-surface);
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .light .text-dim {
@@ -83,14 +106,25 @@
 
   body {
     @apply bg-[var(--color-surface)] text-[var(--color-on-surface)] antialiased overflow-hidden;
-    font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Outfit', system-ui, sans-serif;
+    font-family: 'Outfit', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
   }
 }
 
 @layer components {
+  .suite-view-container {
+    @apply flex-1 flex flex-col min-h-0 overflow-hidden relative;
+    padding: var(--suite-gutter);
+  }
+
   .suite-card {
-    @apply bg-[var(--color-surface-variant)] rounded-[var(--radius-container)] border border-[var(--color-outline)];
-    transition: transform var(--duration-normal) var(--ease-snappy), opacity var(--duration-normal) var(--ease-snappy), border-color var(--duration-normal) var(--ease-snappy);
+    @apply bg-black/40 rounded-[var(--radius-container)] border border-[var(--color-outline)] overflow-hidden relative backdrop-blur-xl;
+    transition: transform var(--duration-normal) var(--ease-snappy), border-color var(--duration-normal) var(--ease-snappy), box-shadow var(--duration-normal) var(--ease-snappy);
+    box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+  }
+
+  .suite-card:hover {
+    @apply border-[var(--color-primary)] shadow-[0_0_50px_rgba(var(--color-primary-rgb),0.12)];
+    transform: translateY(-2px);
   }
 
   .suite-button {
@@ -104,6 +138,11 @@
 
   .suite-button-primary {
     @apply bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:opacity-90;
+    box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.15);
+  }
+
+  .suite-button-primary:hover {
+    box-shadow: 0 0 30px rgba(var(--color-primary-rgb), 0.25);
   }
 
   .suite-button-outline {
@@ -114,14 +153,9 @@
   .suite-button-outline:hover {
     @apply bg-[var(--color-on-surface)] text-[var(--color-surface)];
   }
-
-  .suite-button-ghost {
-    @apply px-3 py-1.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[9px] flex items-center gap-1.5;
-    transition: transform var(--duration-fast) var(--ease-snappy), opacity var(--duration-fast) var(--ease-snappy), background-color var(--duration-fast) var(--ease-snappy);
-  }
   
-  .suite-button-ghost:active {
-    transform: scale(0.96);
+  .suite-button-ghost {
+    @apply px-3 py-1.5 rounded-[var(--radius-element)] font-black uppercase tracking-widest text-[9px] flex items-center gap-1.5 opacity-40 hover:opacity-100 transition-all;
   }
 
   .suite-input {
@@ -140,18 +174,62 @@
   }
 
   /* ── Glassmorphism ── */
-  /* OLED default: subtle white tint separates glass from pure black background */
   .suite-glass-subtle {
-    @apply backdrop-blur-md;
-    background: rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(var(--glass-blur-subtle));
+    background: rgba(255, 255, 255, 0.03);
     will-change: backdrop-filter;
   }
 
   .suite-glass-deep {
-    @apply backdrop-blur-3xl;
-    background: rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(var(--glass-blur-deep));
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--color-outline);
     will-change: backdrop-filter;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.55);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  }
+
+  .suite-glow-text {
+    @apply font-black uppercase tracking-tighter leading-[0.8];
+    text-shadow: 0 0 30px rgba(var(--color-primary-rgb), 0.15);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono) !important;
+    letter-spacing: -0.02em;
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.08),
+      transparent
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  .suite-hub-input {
+    @apply w-full bg-transparent border-none outline-none pl-12 pr-4 py-2 font-mono text-[11px] uppercase tracking-widest text-white transition-all;
+  }
+  
+  .suite-hub-input:focus {
+    @apply scale-[1.01];
   }
 }
 
@@ -166,7 +244,7 @@
 }
 
 /* Standardized Transitions */
-.transition-studio {
+.transition-suite {
   transition: all var(--duration-normal) var(--ease-snappy);
 }
 

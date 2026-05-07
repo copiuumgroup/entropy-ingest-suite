@@ -1,34 +1,33 @@
-import { Activity, Globe, Settings, Moon, Sun, Home, PlayCircle } from 'lucide-react';
+import { Activity, Globe, Settings, Home } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { StudioGlow } from './common/StudioGlow';
+import { cn } from '../utils';
 
 declare const __BUILD_ID__: string;
 
-export type ViewType = 'home' | 'player' | 'vault' | 'studio' | 'yt-dlp';
+export type ViewType = 'home' | 'vault' | 'yt-dlp';
 
 interface Props {
   currentView: ViewType;
   setView: (view: ViewType) => void;
   onOpenSettings: () => void;
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
+  hardwareMetrics?: { cpuPercent: number; memoryWorkingSetMB: number; memoryPrivateMB: number } | null;
 }
 
 const SidebarRail: React.FC<Props> = ({ 
     currentView, 
     setView, 
-    onOpenSettings, 
-    theme, 
-    setTheme 
+    onOpenSettings,
+    hardwareMetrics
 }) => {
   const items = [
-    { id: 'home' as ViewType, icon: Home, label: 'Home' },
-    { id: 'player' as ViewType, icon: PlayCircle, label: 'Player' },
-    { id: 'studio' as ViewType, icon: Activity, label: 'Studio' },
-    { id: 'yt-dlp' as ViewType, icon: Globe, label: 'yt-dlp' },
+    { id: 'home' as ViewType, icon: Home, label: 'HUB' },
+    { id: 'yt-dlp' as ViewType, icon: Globe, label: 'INGEST' },
+    { id: 'vault' as ViewType, icon: Activity, label: 'FOLDER' },
   ];
 
   return (
-    <div className="w-20 flex flex-col items-center py-10 gap-10 relative z-[60] suite-glass-deep border-r border-[var(--color-outline)]">
+    <div className="w-20 flex flex-col items-center py-10 gap-10 relative z-[60] bg-[var(--color-surface)] border-r border-[var(--color-outline)]">
       <div className="w-12 h-12 flex items-center justify-center mb-4 relative group border border-[var(--color-outline)] bg-[var(--color-primary)]/5 rounded-[var(--radius-element)] transition-all hover:border-[var(--color-primary)]/30">
         <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
         <svg 
@@ -39,7 +38,7 @@ const SidebarRail: React.FC<Props> = ({
           className="text-[var(--color-primary)] transition-transform group-hover:scale-110 duration-500 relative z-10"
         >
           <path d="M0 4C0 1.79086 1.79086 0 4 0H28C30.2091 0 32 1.79086 32 4V28C32 30.2091 30.2091 32 28 32H4C1.79086 32 0 30.2091 0 28V4Z" fill="currentColor"/>
-          <path d="M32 0L18 14" stroke="var(--color-surface)" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M32 0L18 14" stroke="var(--color-surface)" strokeWidth="3.5" strokeLinecap="round"/>
         </svg>
       </div>
 
@@ -53,14 +52,15 @@ const SidebarRail: React.FC<Props> = ({
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className={cn(
-                "group relative w-14 h-14 flex items-center justify-center rounded-[var(--radius-element)] transition-colors duration-200",
+                "group relative w-14 h-14 flex items-center justify-center rounded-[var(--radius-element)] transition-all duration-300 border-2",
                 isActive 
-                    ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-lg" 
-                    : "hover:bg-[var(--color-primary)]/10 opacity-40 hover:opacity-100"
+                    ? "bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-lg border-transparent" 
+                    : "border-transparent hover:border-[var(--color-on-surface)]/40 hover:bg-[var(--color-on-surface)]/5 opacity-40 hover:opacity-100 active:scale-90"
               )}
             >
+              {isActive && <StudioGlow className="-z-10" size="sm" opacity={0.25} animate={true} />}
               <item.icon className={cn(
-                  "w-6 h-6 transition-transform duration-300", 
+                  "w-6 h-6 transition-transform duration-300 relative z-10", 
                   isActive ? "scale-110" : "scale-100"
               )} />
               
@@ -73,25 +73,13 @@ const SidebarRail: React.FC<Props> = ({
                   {item.label}
               </motion.div>
 
-              {isActive && (
-                <motion.div 
-                    layoutId="active-indicator"
-                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                    className="absolute -left-1 w-1 h-8 bg-[var(--color-primary)] rounded-r-full"
-                />
-              )}
+
             </motion.button>
           );
         })}
       </div>
 
       <div className="flex flex-col gap-6">
-        <button 
-          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          className="w-14 h-14 flex items-center justify-center transition-all rounded-[var(--radius-element)] opacity-40 hover:opacity-100 hover:bg-[var(--color-primary)]/10"
-        >
-          {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-        </button>
         <button 
           onClick={onOpenSettings}
           className="w-14 h-14 flex items-center justify-center transition-all rounded-[var(--radius-element)] opacity-40 hover:opacity-100 hover:bg-[var(--color-primary)]/10"
@@ -100,16 +88,28 @@ const SidebarRail: React.FC<Props> = ({
         </button>
       </div>
 
+      {/* Metrics Section */}
+      {hardwareMetrics && (
+        <div className="flex flex-col items-center gap-4 mb-2 opacity-30 group-hover:opacity-100 transition-opacity">
+            <div className="flex flex-col items-center">
+                <span className="text-[7px] font-black uppercase tracking-widest mb-0.5">CPU</span>
+                <span className="text-[9px] font-mono font-black">{Math.round(hardwareMetrics.cpuPercent)}%</span>
+            </div>
+            <div className="w-4 h-px bg-[var(--color-outline)]" />
+            <div className="flex flex-col items-center">
+                <span className="text-[7px] font-black uppercase tracking-widest mb-0.5">RAM</span>
+                <span className="text-[9px] font-mono font-black">{Math.round(hardwareMetrics.memoryWorkingSetMB)}<span className="text-[6px] ml-0.5">MB</span></span>
+            </div>
+        </div>
+      )}
+
       {/* Build Versioning */}
       <div className="absolute bottom-4 select-none pointer-events-none">
-        <span className="text-[7px] font-black tracking-[0.3em] opacity-10 vertical-text uppercase">Build {__BUILD_ID__}</span>
+        <span className="text-[7px] font-mono font-black tracking-[0.3em] opacity-20 vertical-text uppercase">Build {__BUILD_ID__}</span>
       </div>
     </div>
   );
 };
 
-function cn(...inputs: (string | undefined | null | false)[]) {
-  return inputs.filter(Boolean).join(' ');
-}
 
 export default SidebarRail;

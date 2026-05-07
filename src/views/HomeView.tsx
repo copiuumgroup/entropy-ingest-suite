@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Activity, PlayCircle, ArrowRight } from 'lucide-react';
+import { Globe, Activity, ArrowRight } from 'lucide-react';
+import { db } from '../db/database';
 import type { ViewType } from '../components/SidebarRail';
 
 interface HomeViewProps {
@@ -8,38 +9,42 @@ interface HomeViewProps {
 }
 
 const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
+  const [vaultStats, setVaultStats] = React.useState<{ count: number; path: string }>({ count: 0, path: '' });
+
+  React.useEffect(() => {
+    if (window.electronAPI) {
+      window.electronAPI.getMusicPath().then(path => {
+        setVaultStats(prev => ({ ...prev, path }));
+      });
+      db.projects.count().then(count => {
+        setVaultStats(prev => ({ ...prev, count }));
+      });
+    }
+  }, []);
+
   const cards = [
     {
-      id: 'studio',
-      title: 'Production Studio',
-      description: 'Your central library and mastering suite. Manage, demix, and master audio locally.',
-      icon: Activity,
-      color: 'text-emerald-400',
-      action: () => onNavigate('studio'),
-      available: true
-    },
-    {
       id: 'yt-dlp',
-      title: 'YT-DLP Downloader',
-      description: 'Download high-quality media straight into your local environment.',
+      title: 'Direct Ingest',
+      description: 'Discovery engine for YouTube and SoundCloud. High-velocity multi-threaded ingestion.',
       icon: Globe,
       color: 'text-blue-400',
       action: () => onNavigate('yt-dlp'),
       available: true
     },
     {
-      id: 'player',
-      title: 'Media Player',
-      description: 'Built-in high-fidelity player with live streaming DSP.',
-      icon: PlayCircle,
-      color: 'text-rose-400',
-      action: () => onNavigate('player'),
+      id: 'vault',
+      title: 'Media Folder',
+      description: 'Manage your local production assets. Instant handoff to VLC, MPV, or system explorer.',
+      icon: Activity,
+      color: 'text-emerald-400',
+      action: () => onNavigate('vault'),
       available: true
     }
   ];
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-12 overflow-y-auto text-center">
+    <div className="suite-view-container items-center justify-center text-center">
       {/* Header Area */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -47,16 +52,33 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
         transition={{ delay: 0.1 }}
         className="mb-16 mt-8 flex flex-col items-center"
       >
-        <h1 className="text-6xl font-black tracking-tighter mb-4 text-[var(--color-primary)] uppercase">
-          Material Suite
+        <div className="flex items-center gap-4 mb-6">
+            <div className="px-3 py-1 bg-[var(--color-primary)] text-[var(--color-on-primary)] text-[10px] font-black uppercase tracking-[0.4em] rounded-full">System_Active</div>
+            <div className="h-px w-12 bg-[var(--color-outline)]" />
+            <div className="text-[10px] font-mono opacity-40 uppercase tracking-widest">Entropy Protocol v2.0</div>
+        </div>
+        <h1 className="text-8xl suite-glow-text mb-4 italic">
+          Entropy <span className="text-[var(--color-primary)] opacity-80 not-italic">HUB</span>
         </h1>
         <p className="text-lg opacity-60 font-medium max-w-2xl text-[var(--color-on-surface)] leading-relaxed">
-          The decentralized, offline-first production environment. Navigate to your desired workspace to begin mastering, downloading, or managing your assets.
+          High-velocity media ingestion and discovery environment. Automated metadata tagging and local library management for sound design and production.
         </p>
+
+        <div className="mt-10 flex gap-8">
+            <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-1">Local_Archive</span>
+                <span className="text-2xl font-mono font-black">{vaultStats.count} <span className="text-xs opacity-20">ITEMS</span></span>
+            </div>
+            <div className="w-px h-10 bg-[var(--color-outline)] opacity-20" />
+            <div className="flex flex-col items-center">
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-1">Storage_Path</span>
+                <span className="text-2xl font-mono font-black uppercase">{vaultStats.path.split('\\').pop() || 'DEFAULT'}</span>
+            </div>
+        </div>
       </motion.div>
 
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
         {cards.map((card, idx) => (
           <motion.div
             key={card.id}
@@ -69,38 +91,26 @@ const HomeView: React.FC<HomeViewProps> = ({ onNavigate }) => {
               damping: 20
             }}
           >
-            <motion.button
+            <button
               onClick={card.action}
-              disabled={!card.available}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className={`w-full text-left p-8 suite-glass-deep border border-[var(--color-outline)] rounded-[var(--radius-container)] group transition-colors duration-300 flex flex-col h-full relative overflow-hidden focus:outline-none ${card.available ? 'hover:bg-[var(--color-primary)]/5 hover:border-[var(--color-primary)]/40 hover:shadow-2xl' : 'opacity-40 cursor-not-allowed'
-                }`}
+              className="suite-card w-full text-left p-10 group flex flex-col h-full focus:outline-none"
             >
-              {/* Subtle background glow effect on hover */}
-              <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary)]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-
               <div className="flex items-start justify-between mb-8 relative z-10">
-                <div className={`p-4 rounded-[var(--radius-element)] bg-[var(--color-surface)] border border-[var(--color-outline)] shadow-lg ${card.color}`}>
-                  <card.icon className="w-8 h-8" />
+                <div className={`p-5 rounded-[var(--radius-element)] bg-black/40 border border-[var(--color-outline)] shadow-lg group-hover:border-[var(--color-primary)] transition-colors ${card.color}`}>
+                  <card.icon className="w-10 h-10" />
                 </div>
-                {card.available && (
-                  <ArrowRight className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
-                )}
-                {!card.available && (
-                  <div className="suite-chip opacity-60">Soon</div>
-                )}
+                <ArrowRight className="w-8 h-8 opacity-40 group-hover:opacity-100 group-hover:text-[var(--color-primary)] transition-all -translate-x-4 group-hover:translate-x-0" />
               </div>
 
               <div className="relative z-10 flex-1">
-                <h3 className="text-2xl font-bold tracking-tight mb-3 text-[var(--color-primary)]">
+                <h3 className="text-3xl font-black tracking-tighter mb-4 text-[var(--color-on-surface)] group-hover:text-[var(--color-primary)] transition-colors uppercase leading-none">
                   {card.title}
                 </h3>
-                <p className="text-[var(--color-on-surface)] opacity-70 leading-relaxed font-medium">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-40 leading-relaxed group-hover:opacity-60 transition-opacity">
                   {card.description}
                 </p>
               </div>
-            </motion.button>
+            </button>
           </motion.div>
         ))}
       </div>

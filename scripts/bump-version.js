@@ -34,7 +34,7 @@ function bump() {
     pkg.version = '0.0.0';
     
     // Inject custom dev-xxxxx ID directly into naming templates
-    const artifactName = `Material Suite.\${ext}`;
+    const artifactName = `Entropy Ingest Suite.\${ext}`;
     if (pkg.build) {
         if (pkg.build.win) pkg.build.win.artifactName = artifactName;
         if (pkg.build.nsis) pkg.build.nsis.artifactName = artifactName;

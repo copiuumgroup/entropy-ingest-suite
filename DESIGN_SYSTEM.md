@@ -1,6 +1,6 @@
-# Material Suite: Professional Design System
+# Entropy Ingest Suite: Professional Design System
 
-A high-performance, asset-focused design language for the Material Suite. This system prioritizes technical precision (the "Studio") while maintaining a premium, modern aesthetic (the "Suite").
+A high-performance, asset-focused design language for the Entropy Ingest Suite. This system prioritizes technical precision (the "Studio") while maintaining a premium, modern aesthetic (the "Suite").
 
 ## 📐 Geometry Hierarchy
 
@@ -18,9 +18,10 @@ The Suite is **Host-Native**. It does not enforce a rigid brand color; instead, 
 
 - **Primary Accent**: Dynamically fetched from the Host OS using Electron's `systemPreferences`.
   - CSS Variable: `--color-primary`
-- **Surface**: Pure Black (`#000000`) or Deep Night Gray to allow audio visualizers to pop with maximum contrast.
+- **Surface**: Pure Black (`#000000`) for absolute depth.
+- **Surface Variant**: Deep Iron Gray (`#161616`) to provide distinguishable depth for cards and containers.
 - **Glassmorphism**: 
-  - **Studio Glass**: `backdrop-blur-md` with 30% alpha for subtle depth.
+  - **Studio Glass**: `backdrop-blur-md` with 4.5% alpha for subtle separation.
   - **Deep Glass**: `backdrop-blur-3xl` for high-impact overlays.
 
 ## 🖱️ Interaction Rules

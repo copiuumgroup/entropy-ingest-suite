@@ -1,48 +1,15 @@
 import Dexie, { type Table } from 'dexie';
 
-export interface ImpulseData {
-  id?: number;
-  name: string;
-  data: ArrayBuffer;
-  duration: number;
-  addedAt: number;
-}
-
-export interface ProjectMetadata {
+export interface MediaMetadata {
   id?: number;
   name: string;
   artist?: string;
   coverArt?: string;
   filePath?: string;
   lastModified: number;
-  // Mastering State
-  settings: {
-    speed: number;
-    reverbWet: number;
-    quality: 'fast' | 'pro';
-    isAutoEQEnabled: boolean;
-    irId?: number;
-    eq: {
-      sub: number;
-      bass: number;
-      mid: number;
-      treble: number;
-      air: number;
-    };
-    attenuation: number;
-    limiter: boolean;
-    roomSize: number;
-    nightcore: boolean;
-  };
-  detectedBpm?: number;
-  detectedGenre?: string;
   sourceUrl?: string;
-  archivedAt?: number;
   mediaType?: 'audio' | 'video';
-  stems?: {
-    vocals: string | null;
-    instrumental: string | null;
-  };
+  duration?: number;
 }
 
 export interface StagedItem {
@@ -62,21 +29,19 @@ export interface QueueItem {
   addedAt: number;
 }
 
-export class StudioDatabase extends Dexie {
-  projects!: Table<ProjectMetadata>;
-  impulses!: Table<ImpulseData>;
+export class EntropyDatabase extends Dexie {
+  projects!: Table<MediaMetadata>;
   stagedItems!: Table<StagedItem>;
   downloadQueue!: Table<QueueItem>;
 
   constructor() {
-    super('StudioDatabase');
-    this.version(4).stores({
+    super('EntropyDatabase');
+    this.version(1).stores({
       projects: '++id, name, lastModified, sourceUrl',
-      impulses: '++id, name, addedAt',
       stagedItems: 'id, url, addedAt',
       downloadQueue: 'id, url, status, addedAt'
     });
   }
 }
 
-export const db = new StudioDatabase();
+export const db = new EntropyDatabase();

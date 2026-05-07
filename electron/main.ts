@@ -9,66 +9,8 @@ import os from 'os';
 const activeProcesses = new Map<string, any>();
 const MAX_BUFFER_SIZE = 512 * 1024 * 1024; // 512MB Limit
 let mainWindow: BrowserWindow | null = null;
-let engineProcess: any = null;
-const engineCallbacks = new Map<string, (data: any) => void>();
 
-class StudioEngineManager {
-  static spawn() {
-    if (engineProcess) return;
 
-    const pythonPath = 'python'; // User confirmed they have python installed
-    const scriptPath = path.join(app.getAppPath(), 'python', 'studio_engine.py');
-
-    console.log('[ENGINE] Spawning Studio Engine...');
-    engineProcess = spawn(pythonPath, ['-u', scriptPath]);
-
-    engineProcess.stdout.on('data', (data: Buffer) => {
-      data.toString().split('\n').forEach(line => {
-        if (!line.trim()) return;
-        try {
-          const msg = jsonSafeParse(line);
-          if (msg.type === 'log') {
-            console.log(`[PYTHON] ${msg.message}`);
-            mainWindow?.webContents.send('engine-log', msg.message);
-          } else if (msg.type === 'response') {
-            const callback = engineCallbacks.get(msg.id);
-            if (callback) {
-              callback(msg.data);
-              engineCallbacks.delete(msg.id);
-            }
-          }
-        } catch (e) {
-          console.error('[ENGINE] Pipe Error:', line);
-        }
-      });
-    });
-
-    engineProcess.stderr.on('data', (data: Buffer) => {
-      console.error(`[PYTHON-ERR] ${data.toString()}`);
-    });
-
-    engineProcess.on('close', () => {
-      console.log('[ENGINE] Studio Engine Exited.');
-      engineProcess = null;
-    });
-  }
-
-  static sendCommand(command: any): Promise<any> {
-    return new Promise((resolve) => {
-      if (!engineProcess) {
-        resolve({ success: false, error: 'Engine not running' });
-        return;
-      }
-      const id = Math.random().toString(36).substring(7);
-      engineCallbacks.set(id, resolve);
-      engineProcess.stdin.write(JSON.stringify({ ...command, id }) + '\n');
-    });
-  }
-}
-
-function jsonSafeParse(str: string) {
-  try { return JSON.parse(str); } catch (e) { return {}; }
-}
 
 function getVaultPath() {
   const localPath = app.getPath('userData').replace('Roaming', 'Local');
@@ -110,9 +52,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'studio', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } },
-  { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } }
+  { scheme: 'studio', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: false, stream: true } },
+  { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: false, stream: true } }
 ]);
+
+// Support Wayland and hardware acceleration on Linux
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+  app.commandLine.appendSwitch('enable-features', 'WaylandWindowDecorations');
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -168,7 +116,8 @@ app.whenReady().then(() => {
           "font-src 'self' studio:; " +
           "img-src 'self' studio: data: blob: https:; " +
           "media-src 'self' studio: media: blob: data: https:; " +
-          "connect-src 'self' studio:;"
+          "connect-src 'self' studio: https:; " +
+          "frame-src https://w.soundcloud.com https://www.youtube.com;"
         ]
       }
     });
@@ -180,8 +129,6 @@ app.whenReady().then(() => {
     try {
       const response = await net.fetch(`file://${filePath}`);
       const headers = new Headers(response.headers);
-      headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-      headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
       headers.set('Access-Control-Allow-Origin', '*');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
     } catch (e) {
@@ -207,7 +154,6 @@ app.whenReady().then(() => {
   });
 
   createWindow();
-  StudioEngineManager.spawn();
 });
 
 // NATIVE HANDLERS
@@ -305,7 +251,7 @@ ipcMain.handle('ytdlp-get-info', async (_event: IpcMainInvokeEvent, trackUrl: st
   return new Promise((resolve) => {
     const proxy = options?.proxy;
     // --flat-playlist gives us metadata without downloading
-    const args = ['--dump-json', '--flat-playlist', '--no-warnings', '--remote-components', 'ejs:github'];
+    const args = ['--dump-json', '--no-warnings', '--remote-components', 'ejs:github'];
 
     args.push('--', trackUrl);
 
@@ -318,19 +264,31 @@ ipcMain.handle('ytdlp-get-info', async (_event: IpcMainInvokeEvent, trackUrl: st
     let output = '';
 
     ytdlpProcess.stdout.on('data', (data: Buffer) => { output += data.toString(); });
+    ytdlpProcess.stderr.on('data', (data: Buffer) => {
+      // Log stderr but don't fail unless exit code is non-zero
+      console.warn('[YTDLP-META-ERR]', data.toString());
+    });
+
     ytdlpProcess.on('close', (code: number) => {
       if (code === 0) {
         try {
-          // Playlist/Profiles return multiple lines of JSON
-          const lines = output.trim().split('\n');
+          // Robust parsing: Only look for lines that appear to be JSON objects
+          const lines = output.trim().split('\n').filter(l => l.trim().startsWith('{'));
           const results = lines.map(line => {
             try {
               const info = JSON.parse(line);
+              let thumbnail = info.thumbnail || (info.thumbnails && info.thumbnails.length > 0 ? info.thumbnails[info.thumbnails.length - 1].url : null);
+
+              // Upgrade SoundCloud thumbnail quality if detected
+              if (thumbnail && thumbnail.includes('sndcdn.com') && thumbnail.includes('-large')) {
+                thumbnail = thumbnail.replace('-large', '-t500x500');
+              }
+
               return {
                 title: info.title || info.display_id || 'Untitled',
-                uploader: info.uploader || info.channel || info.uploader_id,
+                uploader: info.uploader || info.channel || info.uploader_id || 'Unknown',
                 duration: info.duration || 0,
-                thumbnail: info.thumbnail || (info.thumbnails && info.thumbnails[0]?.url),
+                thumbnail: thumbnail,
                 webpage_url: info.webpage_url || trackUrl
               };
             } catch (e) { return null; }
@@ -353,11 +311,13 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
   const quality = options?.quality || 'mp3';
   const win = BrowserWindow.fromWebContents(event.sender);
 
-  // Security Hardening: Ensure destination path is safe
+  // Modular Ingest Settings
+  const connections = options?.connections || 16;
+  const splits = options?.splits || 16;
+  const userAgent = options?.userAgent || 'Mozilla/5.0';
+
   let musicPath = options?.destinationPath || app.getPath('music');
   if (options?.destinationPath && !isPathSafe(options.destinationPath)) {
-    console.warn('[SECURITY] Blocked unsafe download path:', options.destinationPath);
-    console.warn('[SECURITY] Redirecting to default music path.');
     musicPath = app.getPath('music');
   }
 
@@ -365,27 +325,37 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
     const proxy = options?.proxy;
     let args: string[] = [];
 
+    const aria2Args = `aria2c:-x ${connections} -s ${splits} -j ${connections} -c --user-agent="${userAgent}"`;
+
     if (mode === 'audio') {
       args = [
+        '--downloader', 'aria2c',
+        '--downloader-args', aria2Args,
         '-x', '--audio-format', quality,
         '-o', path.join(musicPath, '%(uploader)s - %(title)s.%(ext)s'),
         '--embed-thumbnail',
         '--add-metadata',
+        '--continue',
+        '--user-agent', userAgent,
         '--remote-components', 'ejs:github',
-        '--', // End of options
+        '--',
         trackUrl
       ];
       if (quality === 'mp3') {
-        args.splice(3, 0, '--audio-quality', '320K'); // Force 320kbps CBR
+        args.splice(5, 0, '--audio-quality', '320K');
       }
     } else {
       args = [
+        '--downloader', 'aria2c',
+        '--downloader-args', aria2Args,
         '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '-o', path.join(musicPath, '%(uploader)s - %(title)s.mp4'),
         '--embed-thumbnail',
         '--add-metadata',
+        '--continue',
+        '--user-agent', userAgent,
         '--remote-components', 'ejs:github',
-        '--', // End of options
+        '--',
         trackUrl
       ];
     }
@@ -400,24 +370,32 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
     activeProcesses.set(jobId, ytdlpProcess);
 
     let errorLog = '';
+    let finalPath = '';
 
-    ytdlpProcess.on('error', (err: any) => {
+    ytdlpProcess.on('error', (_err: any) => {
       activeProcesses.delete(jobId);
-      const errMsg = `FATAL: Failed to launch yt-dlp. (${err.message})`;
-      win?.webContents.send('ytdlp-log', errMsg);
       resolve({ success: false, error: 'YT-DLP launch failed' });
     });
 
-    const watchdog = setTimeout(() => {
-      if (activeProcesses.has(jobId)) {
-        ytdlpProcess.kill();
-        activeProcesses.delete(jobId);
-        win?.webContents.send('ytdlp-log', 'ERROR: Process timed out after 5 minutes.');
-      }
-    }, 5 * 60 * 1000);
-
     ytdlpProcess.stdout.on('data', (data: Buffer) => {
-      win?.webContents.send('ytdlp-log', { url: trackUrl, data: data.toString() });
+      const output = data.toString();
+      win?.webContents.send('ytdlp-log', { url: trackUrl, data: output });
+
+      const progressMatch = output.match(/\[download\]\s+(\d+\.\d+)%/);
+      const speedMatch = output.match(/at\s+([\d\.]+[KMG]iB\/s)/);
+
+      if (progressMatch || speedMatch) {
+        win?.webContents.send('ingest-progress', {
+          url: trackUrl,
+          percent: progressMatch ? parseFloat(progressMatch[1]) : undefined,
+          speed: speedMatch ? speedMatch[1] : undefined
+        });
+      }
+
+      const destMatch = output.match(/Destination:\s+(.*)/);
+      if (destMatch) {
+          finalPath = destMatch[1].trim();
+      }
     });
 
     ytdlpProcess.stderr.on('data', (data: Buffer) => {
@@ -427,21 +405,75 @@ ipcMain.handle('ytdlp-download', async (event: IpcMainInvokeEvent, trackUrl: str
     });
 
     ytdlpProcess.on('close', (code: number) => {
-      clearTimeout(watchdog);
       activeProcesses.delete(jobId);
-
-      if (code !== 0 && errorLog) {
-        try {
-          const logDir = app.getPath('userData');
-          const logPath = path.join(logDir, 'ytdlp_error_reports.log');
-          fs.appendFileSync(logPath, `\n[${new Date().toISOString()}] Failed: ${trackUrl}\n${errorLog}\n${'-'.repeat(40)}\n`);
-        } catch (e) { }
-      }
-
-      if (code === 0) resolve({ success: true });
+      if (code === 0) resolve({ success: true, filePath: finalPath });
       else resolve({ success: false, error: 'yt-dlp failed (see log)' });
     });
   });
+});
+
+ipcMain.handle('aria2-direct-download', async (event: IpcMainInvokeEvent, url: string, destinationPath?: string, options?: any) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const targetPath = destinationPath || app.getPath('music');
+
+  const connections = options?.connections || 16;
+  const splits = options?.splits || 16;
+  const userAgent = options?.userAgent || 'Mozilla/5.0';
+
+  return new Promise((resolve) => {
+    const args = [
+      '-x', connections.toString(),
+      '-s', splits.toString(),
+      '-j', connections.toString(),
+      '-c',
+      '--user-agent', userAgent,
+      '--dir', targetPath,
+      url
+    ];
+
+    const aria2Process = spawn('aria2c', args);
+    const jobId = `aria2-direct-${Date.now()}`;
+    activeProcesses.set(jobId, aria2Process);
+
+    aria2Process.stdout.on('data', (data: Buffer) => {
+      const output = data.toString();
+      win?.webContents.send('ytdlp-log', { url, data: output });
+
+      const progressMatch = output.match(/\((\d+)%\)/);
+      const speedMatch = output.match(/DL:([\d\.]+[KMG]iB)/);
+
+      if (progressMatch || speedMatch) {
+        win?.webContents.send('ingest-progress', {
+          url,
+          percent: progressMatch ? parseInt(progressMatch[1]) : undefined,
+          speed: speedMatch ? speedMatch[1].replace('DL:', '') + '/s' : undefined
+        });
+      }
+    });
+
+    aria2Process.on('close', (code: number) => {
+      activeProcesses.delete(jobId);
+      if (code === 0) resolve({ success: true });
+      else resolve({ success: false, error: `aria2c exited with code ${code}` });
+    });
+
+    aria2Process.on('error', (_err: any) => {
+      activeProcesses.delete(jobId);
+      resolve({ success: false, error: _err.message });
+    });
+  });
+});
+
+ipcMain.handle('open-file', async (_event: IpcMainInvokeEvent, filePath: string) => {
+  if (!isPathSafe(filePath)) return false;
+  shell.openPath(filePath);
+  return true;
+});
+
+ipcMain.handle('reveal-file', async (_event: IpcMainInvokeEvent, filePath: string) => {
+  if (!isPathSafe(filePath)) return false;
+  shell.showItemInFolder(filePath);
+  return true;
 });
 
 ipcMain.handle('open-music-folder', async () => {
@@ -470,10 +502,10 @@ ipcMain.handle('check-system-binary', async () => {
     } catch (e) { resolve(false); }
   });
 
-  const ytdlp = await check('yt-dlp');
+  const ytdlp = await check('yt-dlp', '--version');
   const ffmpeg = await check('ffmpeg', '-version');
-  const dotnet = await check('dotnet', '--list-runtimes');
-  return { ytdlp, ffmpeg, dotnet };
+  const aria2 = await check('aria2c', '--version');
+  return { ytdlp, ffmpeg, aria2 };
 });
 
 ipcMain.handle('purge-archives', async () => {
@@ -520,6 +552,10 @@ ipcMain.handle('cache-audio-file', async (_event: IpcMainInvokeEvent, sourcePath
 
     let fileSize = 0;
     if (sourcePath && fs.existsSync(sourcePath)) {
+      if (!isPathSafe(sourcePath)) {
+        console.warn('[SECURITY] Blocked non-safe source path in cache-audio-file:', sourcePath);
+        return null;
+      }
       fileSize = fs.statSync(sourcePath).size;
     } else if (buffer) {
       fileSize = buffer.byteLength;
@@ -568,8 +604,13 @@ ipcMain.handle('save-file', async (event: IpcMainInvokeEvent, fileName: string, 
   }
 });
 
-ipcMain.handle('engine:command', async (_event: IpcMainInvokeEvent, command: any) => {
-  return await StudioEngineManager.sendCommand(command);
+
+
+ipcMain.on('set-zoom-factor', (event, factor) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    win.webContents.setZoomFactor(factor);
+  }
 });
 
 ipcMain.handle('get-temp-path', () => app.getPath('temp'));
