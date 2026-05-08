@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"entropy-cli/tui"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestInitialModel(t *testing.T) {
@@ -42,25 +43,17 @@ func TestQuitting(t *testing.T) {
 	m := tui.NewRootModel()
 	m.ShowSplash = false // Skip splash
 
-	// Step 1: Request quit
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	// The search input starts focused (so users can type 'q' without quitting).
+	// Pressing Escape blurs the input and returns to browse mode.
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = newModel.(tui.RootModel)
 
-	if !m.ConfirmQuit {
-		t.Error("Expected ConfirmQuit to be true after pressing 'q'")
-	}
-
-	view := m.View()
-	if !strings.Contains(view, "Are you sure you want to exit?") {
-		t.Errorf("Expected view to contain quit prompt, got: %s", view)
-	}
-
-	// Step 2: Confirm quit
-	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	// Pressing 'q' now quits immediately — no two-step confirmation.
+	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	m = newModel.(tui.RootModel)
 
 	if !m.Quitting {
-		t.Error("Expected quitting to be true after pressing 'y'")
+		t.Error("Expected Quitting to be true after pressing 'q'")
 	}
 
 	if cmd == nil {

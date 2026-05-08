@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 interface Props {
   className?: string;
-  size?: 'sm' | 'md' | 'lg' | 'full';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'full';
   opacity?: number;
   animate?: boolean;
 }

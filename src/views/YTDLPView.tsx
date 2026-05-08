@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   CloudDownload, Loader2, CheckCircle2, AlertTriangle, Search, 
-  Activity, Play, Music, ListPlus, Trash2, Terminal
+  Activity, Play, Music, ListPlus, Terminal
 } from 'lucide-react';
 import IngestStage from '../components/IngestStage';
 import { useIngest } from '../hooks/useIngest';

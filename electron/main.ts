@@ -1,7 +1,7 @@
 import { app, BrowserWindow, protocol, net, ipcMain, session, dialog, shell, systemPreferences, type IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import * as mm from 'music-metadata';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -86,11 +86,13 @@ function createWindow() {
 
   mainWindow = win;
 
-  const osRelease = os.release().split('.');
-  if (parseInt(osRelease[0]) >= 10 && parseInt(osRelease[2]) >= 22000) {
-    win.setBackgroundMaterial('mica');
-  } else {
-    win.setBackgroundMaterial('acrylic');
+  if (process.platform === 'win32') {
+    const osRelease = os.release().split('.');
+    if (parseInt(osRelease[0]) >= 10 && parseInt(osRelease[2]) >= 22000) {
+      win.setBackgroundMaterial('mica');
+    } else {
+      win.setBackgroundMaterial('acrylic');
+    }
   }
 
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -128,7 +130,7 @@ app.whenReady().then(() => {
     const url = request.url.replace('studio://app/', '');
     const filePath = path.join(__dirname, '../dist', url);
     try {
-      const response = await net.fetch(`file://${filePath}`);
+      const response = await net.fetch(pathToFileURL(filePath).href);
       const headers = new Headers(response.headers);
       headers.set('Access-Control-Allow-Origin', '*');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -148,7 +150,7 @@ app.whenReady().then(() => {
     }
 
     try {
-      return await net.fetch(`file://${filePath}`);
+      return await net.fetch(pathToFileURL(filePath).href);
     } catch (e) {
       return new Response('Not Found', { status: 404 });
     }

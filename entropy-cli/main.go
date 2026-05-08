@@ -9,7 +9,11 @@ import (
 )
 
 func main() {
-	p := tea.NewProgram(tui.NewRootModel(), tea.WithAltScreen())
+	p := tea.NewProgram(
+		tui.NewRootModel(),
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(), // enables mouse click & scroll
+	)
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

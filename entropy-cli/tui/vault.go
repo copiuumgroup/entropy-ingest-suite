@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,29 +11,60 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var audioExtensions = map[string]bool{
+	".mp3":  true,
+	".flac": true,
+	".wav":  true,
+	".aac":  true,
+	".ogg":  true,
+	".m4a":  true,
+	".opus": true,
+	".wma":  true,
+}
+
 type VaultItem struct {
 	Name string
 	Path string
+	Ext  string
+	Size int64
 }
 
-func (i VaultItem) Title() string       { return i.Name }
-func (i VaultItem) Description() string { return i.Path }
+func (i VaultItem) Title() string { return strings.TrimSuffix(i.Name, filepath.Ext(i.Name)) }
+func (i VaultItem) Description() string {
+	ext := strings.ToUpper(strings.TrimPrefix(i.Ext, "."))
+	sizeMB := float64(i.Size) / 1024 / 1024
+	if sizeMB >= 1 {
+		return fmt.Sprintf("%s  ·  %.1f MB", ext, sizeMB)
+	}
+	sizeKB := float64(i.Size) / 1024
+	return fmt.Sprintf("%s  ·  %.0f KB", ext, sizeKB)
+}
 func (i VaultItem) FilterValue() string { return i.Name }
 
 type VaultModel struct {
-	List list.Model
-	Keys VaultKeyMap
+	List      list.Model
+	MusicPath string
+	Keys      VaultKeyMap
 }
 
 func NewVaultModel() VaultModel {
 	delegate := list.NewDefaultDelegate()
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.Foreground(PrimaryColor).BorderLeftForeground(PrimaryColor)
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.Foreground(PrimaryColor).BorderLeftForeground(PrimaryColor)
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		Foreground(PrimaryColor).
+		BorderLeftForeground(PrimaryColor)
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
+		Foreground(SecondaryColor).
+		BorderLeftForeground(PrimaryColor)
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.Title = "Local Archive"
-	l.SetShowStatusBar(false)
+	l.Title = "Music Library"
+	l.SetShowStatusBar(true)
 	l.SetFilteringEnabled(true)
+	l.SetShowHelp(false)
+	l.Styles.Title = lipgloss.NewStyle().
+		Foreground(PrimaryColor).
+		Bold(true).
+		Padding(0, 1)
 
 	return VaultModel{
 		List: l,
@@ -54,18 +86,25 @@ func (m VaultModel) Update(msg tea.Msg) (VaultModel, tea.Cmd) {
 		m.List.SetSize(msg.Width-h, msg.Height-v-10)
 
 	case VaultMsg:
+		m.MusicPath = msg.Path
 		var items []list.Item
-		for _, f := range msg {
-			items = append(items, VaultItem{
-				Name: f,
-				Path: "~/Music",
-			})
+		for _, f := range msg.Files {
+			items = append(items, f)
+		}
+		// Update list title to show count
+		if len(items) > 0 {
+			m.List.Title = fmt.Sprintf("Music Library  ·  %d tracks", len(items))
+		} else {
+			m.List.Title = "Music Library"
 		}
 		cmd = m.List.SetItems(items)
 		cmds = append(cmds, cmd)
 
 	case tea.KeyMsg:
-		// Not implementing play/delete in this simple prototype yet
+		m.List, cmd = m.List.Update(msg)
+		cmds = append(cmds, cmd)
+
+	case tea.MouseMsg:
 		m.List, cmd = m.List.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -75,12 +114,24 @@ func (m VaultModel) Update(msg tea.Msg) (VaultModel, tea.Cmd) {
 
 func (m VaultModel) View() string {
 	if len(m.List.Items()) == 0 {
-		return "\n\n  " + lipgloss.NewStyle().Foreground(LightGray).Render("Your archive is currently empty.") + "\n"
+		emptyStyle := lipgloss.NewStyle().Foreground(LightGray)
+		pathStyle := lipgloss.NewStyle().Foreground(PrimaryColor)
+		var sb strings.Builder
+		sb.WriteString("\n\n  " + emptyStyle.Render("Your music library is empty.") + "\n")
+		if m.MusicPath != "" {
+			sb.WriteString("  " + emptyStyle.Render("Files will appear here once you download them.") + "\n")
+			sb.WriteString("  " + emptyStyle.Render("Library folder: ") + pathStyle.Render(m.MusicPath) + "\n")
+		}
+		return sb.String()
 	}
 	return m.List.View()
 }
 
-type VaultMsg []string
+// VaultMsg carries the scanned file list back to the model
+type VaultMsg struct {
+	Files []VaultItem
+	Path  string
+}
 
 func ScanVaultCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -89,14 +140,31 @@ func ScanVaultCmd() tea.Cmd {
 
 		files, err := os.ReadDir(musicPath)
 		if err != nil {
-			return VaultMsg([]string{})
+			return VaultMsg{Path: musicPath}
 		}
-		var vaultFiles []string
+
+		var vaultFiles []VaultItem
 		for _, f := range files {
-			if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp3") {
-				vaultFiles = append(vaultFiles, f.Name())
+			if f.IsDir() {
+				continue
 			}
+			ext := strings.ToLower(filepath.Ext(f.Name()))
+			if !audioExtensions[ext] {
+				continue
+			}
+			info, _ := f.Info()
+			var size int64
+			if info != nil {
+				size = info.Size()
+			}
+			vaultFiles = append(vaultFiles, VaultItem{
+				Name: f.Name(),
+				Path: filepath.Join(musicPath, f.Name()),
+				Ext:  ext,
+				Size: size,
+			})
 		}
-		return VaultMsg(vaultFiles)
+
+		return VaultMsg{Files: vaultFiles, Path: musicPath}
 	}
 }

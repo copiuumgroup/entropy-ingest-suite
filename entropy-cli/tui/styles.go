@@ -4,15 +4,17 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
 	// Colors
-	PrimaryColor = lipgloss.Color("#00FF9D")
-	AccentColor  = lipgloss.Color("#7000FF")
-	WhiteColor   = lipgloss.Color("#FFFFFF")
-	GrayColor    = lipgloss.Color("#333333")
-	LightGray    = lipgloss.Color("#777777")
-	BgDeep       = lipgloss.Color("#0A0A0A")
-	ErrorColor   = lipgloss.Color("#FF3333")
-	YouTubeColor = lipgloss.Color("#FF0000")
-	SCColor      = lipgloss.Color("#FF5500")
+	PrimaryColor   = lipgloss.Color("#00FF9D")
+	AccentColor    = lipgloss.Color("#7000FF")
+	SecondaryColor = lipgloss.Color("#A0A0A0")
+	SuccessColor   = lipgloss.Color("#00C46A")
+	WhiteColor     = lipgloss.Color("#FFFFFF")
+	GrayColor      = lipgloss.Color("#333333")
+	LightGray      = lipgloss.Color("#777777")
+	BgDeep         = lipgloss.Color("#0A0A0A")
+	ErrorColor     = lipgloss.Color("#FF3333")
+	YouTubeColor   = lipgloss.Color("#FF0000")
+	SCColor        = lipgloss.Color("#FF5500")
 
 	// Base Styles
 	BaseStyle = lipgloss.NewStyle().
@@ -36,6 +38,7 @@ var (
 			Foreground(PrimaryColor).
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(PrimaryColor).
+			Bold(true).
 			Padding(0, 2)
 
 	InactiveTabStyle = lipgloss.NewStyle().

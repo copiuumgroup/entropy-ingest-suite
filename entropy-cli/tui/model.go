@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"entropy-cli/internal/ingest"
@@ -23,18 +25,24 @@ type ErrorMsg struct {
 	Err error
 }
 
+type YtDlpUpdateMsg struct {
+	Status string
+	Err    error
+}
+
 type RootModel struct {
-	Width        int
-	Height       int
-	ActiveTab    tab
-	Search       SearchModel
-	Forge        ForgeModel
-	Vault        VaultModel
-	Help         help.Model
-	Keys         GlobalKeyMap
-	Quitting     bool
-	ConfirmQuit  bool
-	ShowSplash   bool
+	Width      int
+	Height     int
+	ActiveTab  tab
+	Search     SearchModel
+	Forge      ForgeModel
+	Vault      VaultModel
+	Help       help.Model
+	Keys       GlobalKeyMap
+	Quitting      bool
+	ShowSplash    bool
+	LastError     string
+	BannerIsError bool
 }
 
 func NewRootModel() RootModel {
@@ -64,36 +72,64 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Any key dismisses the splash
 		if m.ShowSplash {
-			// Any key dismisses the splash screen
 			m.ShowSplash = false
 			return m, nil
 		}
 
-		if key.Matches(msg, m.Keys.Quit) {
-			if m.ConfirmQuit {
+		// Dismiss error banner on any key
+		if m.LastError != "" {
+			m.LastError = ""
+		}
+
+		raw := msg.String()
+
+		// ── QUIT: only q / ctrl+c ──────────────────────────────────────────
+		// Never trigger when search input is active (user might type "q")
+		if !m.Search.Input.Focused() {
+			if key.Matches(msg, m.Keys.Quit) {
 				m.Quitting = true
 				return m, tea.Quit
 			}
-			m.ConfirmQuit = true
-			return m, nil
+		}
+		if raw == "ctrl+c" {
+			m.Quitting = true
+			return m, tea.Quit
 		}
 
-		if m.ConfirmQuit {
-			if msg.String() == "y" || msg.String() == "Y" || msg.String() == "enter" {
-				m.Quitting = true
-				return m, tea.Quit
-			}
-			m.ConfirmQuit = false
-			return m, nil
+		// ── ESC: universal "back to search" ───────────────────────────────
+		// Absorb ESC at the root so it never accidentally quits or leaks.
+		if raw == "esc" && !m.Search.Input.Focused() {
+			m.ActiveTab = tabSearch
+			cmd = m.Search.Input.Focus()
+			return m, cmd
 		}
 
-		if key.Matches(msg, m.Keys.Help) {
+		// ── Toggle help ────────────────────────────────────────────────────
+		if key.Matches(msg, m.Keys.Help) && !m.Search.Input.Focused() {
 			m.Help.ShowAll = !m.Help.ShowAll
 			return m, nil
 		}
 
-		// Only handle tab switching if not searching (typing in input)
+		// ── Direct tab jumps: 1 / 2 / 3 ──────────────────────────────────
+		if !m.Search.Input.Focused() {
+			switch raw {
+			case "1":
+				m.ActiveTab = tabSearch
+				cmd = m.Search.Input.Focus()
+				return m, cmd
+			case "2":
+				m.ActiveTab = tabForge
+				return m, nil
+			case "3":
+				m.ActiveTab = tabVault
+				cmds = append(cmds, ScanVaultCmd())
+				return m, tea.Batch(cmds...)
+			}
+		}
+
+		// ── Tab cycling: Tab / Shift+Tab ──────────────────────────────────
 		if !m.Search.Input.Focused() {
 			if key.Matches(msg, m.Keys.NextTab) {
 				m.ActiveTab = (m.ActiveTab + 1) % 3
@@ -109,10 +145,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, tea.Batch(cmds...)
 			}
+			// / focuses search from anywhere
 			if key.Matches(msg, m.Keys.FocusSearch) {
 				m.ActiveTab = tabSearch
-				cmd := m.Search.Input.Focus()
+				cmd = m.Search.Input.Focus()
 				return m, cmd
+			}
+
+			// U triggers yt-dlp update
+			if key.Matches(msg, m.Keys.Update) {
+				m.LastError = "Updating yt-dlp... please wait."
+				m.BannerIsError = false
+				return m, UpdateYtDlpCmd()
 			}
 		}
 
@@ -123,56 +167,58 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.Search, cmd = m.Search.Update(msg)
 		cmds = append(cmds, cmd)
-
 		m.Forge, cmd = m.Forge.Update(msg)
 		cmds = append(cmds, cmd)
-
 		m.Vault, cmd = m.Vault.Update(msg)
 		cmds = append(cmds, cmd)
-
 		return m, tea.Batch(cmds...)
 
 	case TickMsg:
 		cmds = append(cmds, TickCmd())
 
-	// Route global messages to components
-	case DownloadProgressMsg, DownloadDoneMsg:
+	case ErrorMsg:
+		m.LastError = msg.Err.Error()
+		m.BannerIsError = true
+
+	case YtDlpUpdateMsg:
+		if msg.Err != nil {
+			m.LastError = "Update failed: " + msg.Err.Error()
+			m.BannerIsError = true
+		} else {
+			m.LastError = msg.Status
+			m.BannerIsError = false
+		}
+
+	// Route download messages to Forge regardless of active tab
+	case DownloadProgressMsg, DownloadDoneMsg, DownloadErrorMsg:
 		m.Forge, cmd = m.Forge.Update(msg)
 		cmds = append(cmds, cmd)
-		// If download done, might want to refresh vault
 		if _, ok := msg.(DownloadDoneMsg); ok {
 			cmds = append(cmds, ScanVaultCmd())
 		}
 	}
 
-	// Route specific messages based on active tab
+	// Route remaining messages to the active tab
 	if !m.ShowSplash {
 		switch m.ActiveTab {
 		case tabSearch:
 			m.Search, cmd = m.Search.Update(msg)
 			cmds = append(cmds, cmd)
-			// Intercept SearchResultMsg or Enter to trigger Download
+
+			// When Enter is pressed on a list item → start download
 			if keyMsg, ok := msg.(tea.KeyMsg); ok {
 				if key.Matches(keyMsg, m.Search.Keys.Enter) && !m.Search.Input.Focused() {
-					if i, ok := m.Search.List.SelectedItem().(ResultItem); ok {
-						newID := len(m.Forge.Downloads)
-						ch := make(chan ingest.Progress)
-						m.Forge.Downloads = append(m.Forge.Downloads, Download{
-							ID:           newID,
-							URL:          i.URL,
-							Title:        i.TrackTitle,
-							Status:       "Starting",
-							ProgressChan: ch,
-						})
-						cmds = append(cmds, StartDownloadCmd(i.URL, newID, ch))
-						cmds = append(cmds, WaitForProgressCmd(newID, ch))
-						m.ActiveTab = tabForge // auto switch to forge
+					if item, ok := m.Search.List.SelectedItem().(ResultItem); ok {
+						cmds = append(cmds, m.startDownload(item)...)
+						m.ActiveTab = tabForge
 					}
 				}
 			}
+
 		case tabForge:
 			m.Forge, cmd = m.Forge.Update(msg)
 			cmds = append(cmds, cmd)
+
 		case tabVault:
 			m.Vault, cmd = m.Vault.Update(msg)
 			cmds = append(cmds, cmd)
@@ -182,16 +228,41 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// startDownload queues a new download for the given result item.
+func (m *RootModel) startDownload(item ResultItem) []tea.Cmd {
+	newID := len(m.Forge.Downloads)
+	ch := make(chan ingest.Progress)
+
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(PrimaryColor)
+
+	prog := progress.New(
+		progress.WithDefaultGradient(),
+		progress.WithWidth(40),
+	)
+
+	m.Forge.Downloads = append(m.Forge.Downloads, Download{
+		ID:           newID,
+		URL:          item.URL,
+		Title:        item.TrackTitle,
+		Spinner:      sp,
+		Progress:     prog,
+		Status:       "Starting...",
+		Phase:        "waiting",
+		ProgressChan: ch,
+	})
+
+	return []tea.Cmd{
+		StartDownloadCmd(item.URL, newID, ch),
+		WaitForProgressCmd(newID, ch),
+		sp.Tick,
+	}
+}
+
 func (m RootModel) View() string {
 	if m.Quitting {
-		return "\n  Exiting Entropy CLI...\n"
-	}
-
-	if m.ConfirmQuit {
-		prompt := "\n\n\n\n\n\n\n" +
-			lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render(" Are you sure you want to exit? ") + "\n\n" +
-			lipgloss.NewStyle().Foreground(LightGray).Render("Press Y or Enter to confirm, any other key to cancel.")
-		return lipgloss.Place(m.Width, m.Height, lipgloss.Center, lipgloss.Center, prompt)
+		return "\n  Goodbye.\n"
 	}
 
 	if m.ShowSplash {
@@ -202,12 +273,21 @@ func (m RootModel) View() string {
 		return lipgloss.Place(m.Width, m.Height, lipgloss.Center, lipgloss.Center, splashContent)
 	}
 
-	// Tabs Header
-	tabs := []string{"Search", "Downloads", "~/Music"}
-	if len(m.Forge.Downloads) > 0 {
-		tabs[1] = fmt.Sprintf("Downloads (%d)", len(m.Forge.Downloads))
+	// ── Tab bar ────────────────────────────────────────────────────────────
+	downloadLabel := "Downloads"
+	activeCount := 0
+	for _, d := range m.Forge.Downloads {
+		if d.Phase == "downloading" || d.Phase == "processing" || d.Phase == "waiting" {
+			activeCount++
+		}
+	}
+	if activeCount > 0 {
+		downloadLabel = fmt.Sprintf("Downloads (%d active)", activeCount)
+	} else if len(m.Forge.Downloads) > 0 {
+		downloadLabel = fmt.Sprintf("Downloads (%d)", len(m.Forge.Downloads))
 	}
 
+	tabs := []string{"1 Search", "2 " + downloadLabel, "3 Library"}
 	var renderedTabs []string
 	for i, t := range tabs {
 		if i == int(m.ActiveTab) {
@@ -216,9 +296,30 @@ func (m RootModel) View() string {
 			renderedTabs = append(renderedTabs, InactiveTabStyle.Render(t))
 		}
 	}
-	tabRow := lipgloss.NewStyle().PaddingTop(1).Render(lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...))
+	tabRow := lipgloss.NewStyle().PaddingTop(1).Render(
+		lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...),
+	)
 
-	// Main Content Area
+	// ── Error banner ───────────────────────────────────────────────────────
+	var errorBanner string
+	if m.LastError != "" {
+		bannerColor := ErrorColor
+		icon := "✗ "
+		if !m.BannerIsError {
+			bannerColor = AccentColor
+			icon = "ℹ "
+		}
+
+		errorBanner = lipgloss.NewStyle().
+			Foreground(WhiteColor).
+			Background(bannerColor).
+			Bold(true).
+			Padding(0, 2).
+			Width(m.Width).
+			Render(icon + " " + m.LastError + "  (any key to dismiss)") + "\n"
+	}
+
+	// ── Content ────────────────────────────────────────────────────────────
 	var content string
 	switch m.ActiveTab {
 	case tabSearch:
@@ -228,8 +329,8 @@ func (m RootModel) View() string {
 	case tabVault:
 		content = m.Vault.View()
 	}
-	
-	// Help Footer
+
+	// ── Help footer ────────────────────────────────────────────────────────
 	var helpView string
 	switch m.ActiveTab {
 	case tabSearch:
@@ -241,21 +342,25 @@ func (m RootModel) View() string {
 	}
 	helpBox := HelpStyle.Render(helpView)
 
-	// Calculate remaining height for content
+	// ── Layout ─────────────────────────────────────────────────────────────
 	h, v := BaseStyle.GetFrameSize()
-	tabHeight := lipgloss.Height(tabRow)
-	helpHeight := lipgloss.Height(helpBox)
-	
-	contentHeight := m.Height - tabHeight - helpHeight - v
-	if contentHeight < 10 { contentHeight = 10 }
-	
+	tabH := lipgloss.Height(tabRow)
+	helpH := lipgloss.Height(helpBox)
+	errH := lipgloss.Height(errorBanner)
+
+	contentH := m.Height - tabH - helpH - errH - v
+	if contentH < 10 {
+		contentH = 10
+	}
+
 	contentBox := lipgloss.NewStyle().
 		Width(m.Width - h).
-		Height(contentHeight).
+		Height(contentH).
 		Render(content)
-		
+
 	ui := lipgloss.JoinVertical(lipgloss.Left,
 		tabRow,
+		errorBanner,
 		BaseStyle.Render(contentBox),
 		helpBox,
 	)
@@ -263,7 +368,7 @@ func (m RootModel) View() string {
 	return lipgloss.Place(m.Width, m.Height, lipgloss.Left, lipgloss.Top, ui)
 }
 
-// TickMsg and TickCmd for periodic updates
+// TickMsg / TickCmd for periodic re-renders.
 type TickMsg time.Time
 
 func TickCmd() tea.Cmd {
@@ -272,12 +377,20 @@ func TickCmd() tea.Cmd {
 	})
 }
 
-// Implement help.KeyMap for context menus
+func UpdateYtDlpCmd() tea.Cmd {
+	return func() tea.Msg {
+		status, err := ingest.UpdateYtDlp()
+		return YtDlpUpdateMsg{Status: status, Err: err}
+	}
+}
+
+// help.KeyMap implementations
+
 func (k SearchKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.ToggleProvider, k.Enter, k.Cancel}
+	return []key.Binding{k.ToggleProvider, k.Enter, k.Back}
 }
 func (k SearchKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.ToggleProvider, k.Enter, k.Cancel}}
+	return [][]key.Binding{{k.ToggleProvider, k.Enter, k.Back}}
 }
 
 func (k ForgeKeyMap) ShortHelp() []key.Binding {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"entropy-cli/internal/ingest"
@@ -17,8 +18,10 @@ type Download struct {
 	URL          string
 	Title        string
 	Progress     progress.Model
+	Spinner      spinner.Model
 	Speed        string
 	Status       string
+	Phase        string // "waiting", "downloading", "processing", "done", "error"
 	ProgressChan chan ingest.Progress
 }
 
@@ -46,7 +49,18 @@ func (m ForgeModel) Update(msg tea.Msg) (ForgeModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		for i := range m.Downloads {
-			m.Downloads[i].Progress.Width = msg.Width - 20
+			m.Downloads[i].Progress.Width = msg.Width - 24
+		}
+
+	case tea.MouseMsg:
+		// Mouse events forwarded (no-op for now but keeps message bus clean)
+	case spinner.TickMsg:
+		for i := range m.Downloads {
+			if m.Downloads[i].Phase == "downloading" || m.Downloads[i].Phase == "processing" {
+				newSp, cmd := m.Downloads[i].Spinner.Update(msg)
+				m.Downloads[i].Spinner = newSp
+				cmds = append(cmds, cmd)
+			}
 		}
 
 	case progress.FrameMsg:
@@ -61,6 +75,7 @@ func (m ForgeModel) Update(msg tea.Msg) (ForgeModel, tea.Cmd) {
 			if m.Downloads[i].ID == msg.ID {
 				m.Downloads[i].Status = msg.Status
 				m.Downloads[i].Speed = msg.Speed
+				m.Downloads[i].Phase = msg.Phase
 				cmds = append(cmds, m.Downloads[i].Progress.SetPercent(msg.Percent))
 				cmds = append(cmds, WaitForProgressCmd(msg.ID, m.Downloads[i].ProgressChan))
 			}
@@ -69,8 +84,18 @@ func (m ForgeModel) Update(msg tea.Msg) (ForgeModel, tea.Cmd) {
 	case DownloadDoneMsg:
 		for i := range m.Downloads {
 			if m.Downloads[i].ID == int(msg) {
-				m.Downloads[i].Status = "Ready in ~/Music"
+				m.Downloads[i].Status = "Saved to ~/Music"
 				m.Downloads[i].Speed = ""
+				m.Downloads[i].Phase = "done"
+				cmds = append(cmds, m.Downloads[i].Progress.SetPercent(1.0))
+			}
+		}
+
+	case DownloadErrorMsg:
+		for i := range m.Downloads {
+			if m.Downloads[i].ID == msg.ID {
+				m.Downloads[i].Status = fmt.Sprintf("Failed: %s", msg.Err.Error())
+				m.Downloads[i].Phase = "error"
 			}
 		}
 	}
@@ -80,16 +105,59 @@ func (m ForgeModel) Update(msg tea.Msg) (ForgeModel, tea.Cmd) {
 
 func (m ForgeModel) View() string {
 	var sb strings.Builder
+
 	if len(m.Downloads) == 0 {
-		sb.WriteString("\n\n  " + lipgloss.NewStyle().Foreground(LightGray).Render("No active downloads.") + "\n")
-		sb.WriteString("  " + lipgloss.NewStyle().Foreground(LightGray).Render("Switch to the Search tab to begin.") + "\n")
-	} else {
-		sb.WriteString("\n")
-		for _, d := range m.Downloads {
-			sb.WriteString(fmt.Sprintf("%s %s\n", StatusStyle.Render(d.Status), d.Title))
-			sb.WriteString(fmt.Sprintf("%s  %s\n\n\n", d.Progress.View(), StatusStyle.Render(d.Speed)))
-		}
+		emptyStyle := lipgloss.NewStyle().Foreground(LightGray)
+		sb.WriteString("\n\n  " + emptyStyle.Render("No downloads yet.") + "\n")
+		sb.WriteString("  " + emptyStyle.Render("Go to the Search tab, find a track, and press Enter to start downloading.") + "\n")
+		return sb.String()
 	}
+
+	sb.WriteString("\n")
+	for _, d := range m.Downloads {
+		// Status icon + label
+		var icon, statusText string
+		switch d.Phase {
+		case "done":
+			icon = lipgloss.NewStyle().Foreground(SuccessColor).Render("✓")
+			statusText = lipgloss.NewStyle().Foreground(SuccessColor).Bold(true).Render("Done")
+		case "error":
+			icon = lipgloss.NewStyle().Foreground(ErrorColor).Render("✗")
+			statusText = lipgloss.NewStyle().Foreground(ErrorColor).Bold(true).Render(d.Status)
+		case "processing":
+			icon = d.Spinner.View()
+			statusText = lipgloss.NewStyle().Foreground(AccentColor).Bold(true).Render(d.Status)
+		case "downloading":
+			icon = d.Spinner.View()
+			statusStr := d.Status
+			if d.Speed != "" {
+				statusStr += "  " + d.Speed
+			}
+			statusText = lipgloss.NewStyle().Foreground(PrimaryColor).Bold(true).Render(statusStr)
+		default:
+			icon = lipgloss.NewStyle().Foreground(LightGray).Render("·")
+			statusText = lipgloss.NewStyle().Foreground(LightGray).Render("Waiting to start...")
+		}
+
+		// Title (truncated if needed)
+		maxTitleLen := m.Width - 20
+		if maxTitleLen < 20 {
+			maxTitleLen = 20
+		}
+		title := d.Title
+		if len(title) > maxTitleLen {
+			title = title[:maxTitleLen-3] + "..."
+		}
+		titleStr := lipgloss.NewStyle().Bold(true).Foreground(WhiteColor).Render(title)
+
+		sb.WriteString(fmt.Sprintf("  %s  %s\n", icon, titleStr))
+		sb.WriteString(fmt.Sprintf("     %s\n", statusText))
+		if d.Phase != "error" {
+			sb.WriteString(fmt.Sprintf("     %s\n", d.Progress.View()))
+		}
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
 
@@ -99,9 +167,15 @@ type DownloadProgressMsg struct {
 	Percent float64
 	Speed   string
 	Status  string
+	Phase   string
 }
 
 type DownloadDoneMsg int
+
+type DownloadErrorMsg struct {
+	ID  int
+	Err error
+}
 
 func WaitForProgressCmd(id int, ch chan ingest.Progress) tea.Cmd {
 	return func() tea.Msg {
@@ -114,6 +188,7 @@ func WaitForProgressCmd(id int, ch chan ingest.Progress) tea.Cmd {
 			Percent: p.Percent,
 			Speed:   p.Speed,
 			Status:  p.Status,
+			Phase:   p.Phase,
 		}
 	}
 }
@@ -133,7 +208,7 @@ func StartDownloadCmd(url string, id int, ch chan ingest.Progress) tea.Cmd {
 		}
 		err := ingest.Download(url, opts, ch)
 		if err != nil {
-			return ErrorMsg{Err: err}
+			return DownloadErrorMsg{ID: id, Err: err}
 		}
 		return nil
 	}
