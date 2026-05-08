@@ -1,34 +1,35 @@
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-dist-electron/
-release/
+
 # Compiled binaries
 entropy
 entropy.exe
-entropy-cli-test
-entropy-cli-test.exe
 entropy-cli
 entropy-cli.exe
+entropy-cli-test
+entropy-cli-test.exe
 bin/
+
+# Local configuration
+*.local
+archive.txt
