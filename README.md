@@ -4,6 +4,15 @@ A high-performance, standalone media ingest engine and TUI for YouTube and Sound
 
 Entropy CLI is designed for speed, reliability, and ease of use. It replaces the original Electron-based suite with a native Go implementation, offering a robust terminal-based workflow for downloading and managing your music library.
 
+### Project Statistics
+| Metric | Value |
+| :--- | :--- |
+| **Language** | Go (100%) |
+| **Line Count** | ~2,483 lines |
+| **Native Files** | 12 |
+| **Dependencies** | 0 Node.js (Pure Go) |
+
+
 ## Features
 
 - **Blazing Fast Ingestion**: Powered by `yt-dlp` and `aria2c` for maximum speed.
