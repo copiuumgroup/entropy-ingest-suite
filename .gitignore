@@ -24,3 +24,11 @@ dist-ssr
 *.sw?
 dist-electron/
 release/
+# Compiled binaries
+entropy
+entropy.exe
+entropy-cli-test
+entropy-cli-test.exe
+entropy-cli
+entropy-cli.exe
+bin/

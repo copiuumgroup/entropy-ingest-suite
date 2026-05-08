@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/copiuumgroup/entropy-cli/internal/config"
 )
@@ -150,10 +152,6 @@ func Search(query string, provider string) ([]Result, error) {
 	args := []string{
 		"--dump-json",
 		"--no-warnings",
-		"--remote-components", "ejs:github",
-	}
-	if archive := config.ArchivePath(); archive != "" {
-		args = append(args, "--download-archive", archive)
 	}
 	args = append(args, fmt.Sprintf("%s%s", prefix, query))
 
@@ -178,7 +176,6 @@ func FetchInfo(url string) ([]Result, error) {
 	baseArgs := []string{
 		"--dump-json",
 		"--no-warnings",
-		"--remote-components", "ejs:github",
 	}
 	if archive := config.ArchivePath(); archive != "" {
 		baseArgs = append(baseArgs, "--download-archive", archive)
@@ -261,20 +258,20 @@ func Download(url string, opt DownloadOptions, progressChan chan Progress) error
 		opt.UserAgent = "Mozilla/5.0"
 	}
 
-	aria2Args := fmt.Sprintf("aria2c:-x %d -s %d -j %d -c --user-agent=\"%s\"",
+	aria2Args := fmt.Sprintf("aria2c:-x %d -s %d -j %d -c --user-agent=%s",
 		opt.Connections, opt.Splits, opt.Connections, opt.UserAgent)
 
 	args := []string{
 		"--newline",
 		"--progress",
 		"--progress-template", "downloading:%(progress._percent_str)s:%(progress._speed_str)s",
+		"--no-playlist",
 		"--downloader", "aria2c",
 		"--downloader-args", aria2Args,
 		"--user-agent", opt.UserAgent,
 		"--embed-thumbnail",
 		"--add-metadata",
 		"--continue",
-		"--remote-components", "ejs:github",
 		"-o", fmt.Sprintf("%s/%%(uploader)s - %%(title)s.%%(ext)s", opt.DestinationPath),
 	}
 
@@ -354,7 +351,35 @@ func Download(url string, opt DownloadOptions, progressChan chan Progress) error
 	}
 
 	err = cmd.Wait()
-	wg.Wait()        // ensure stderr goroutine finishes before we close
+	wg.Wait() // ensure stderr goroutine finishes before we close
 	close(progressChan)
+
+	// If yt-dlp exited non-zero but a file was written, treat as success.
+	// This prevents warnings about metadata or already-downloaded files from failing the TUI.
+	if err != nil {
+		if recentFileExists(opt.DestinationPath) {
+			return nil
+		}
+	}
+
 	return err
+}
+
+// recentFileExists checks if any file in the directory was modified in the last 30 seconds.
+func recentFileExists(dir string) bool {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	for _, f := range files {
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+		if now.Sub(info.ModTime()) < 30*time.Second {
+			return true
+		}
+	}
+	return false
 }

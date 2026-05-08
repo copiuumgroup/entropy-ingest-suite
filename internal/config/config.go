@@ -141,7 +141,23 @@ func Load() error {
 			}
 		}
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	C.OutputDir = ExpandHome(C.OutputDir)
+	return nil
+}
+
+// ExpandHome replaces ~ at the start of a path with the user's home directory.
+func ExpandHome(path string) string {
+	if !strings.HasPrefix(path, "~") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[1:])
 }
 
 // Save writes the current Config back to disk.
@@ -174,6 +190,7 @@ provider = %q  # youtube | soundcloud
 		C.Provider,
 	)
 
+	C.OutputDir = ExpandHome(C.OutputDir)
 	return os.WriteFile(path, []byte(content), 0644)
 }
 

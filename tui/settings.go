@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -19,20 +20,20 @@ type SettingsModel struct {
 
 func NewSettingsModel() SettingsModel {
 	m := SettingsModel{
-		Inputs: make([]textinput.Model, 3),
+		Inputs: make([]textinput.Model, 5),
 		Keys:   SettingsKeys(),
 	}
 
 	// Output Dir
 	m.Inputs[0] = textinput.New()
-	m.Inputs[0].Placeholder = "Output Directory"
+	m.Inputs[0].Placeholder = "Output Directory (e.g. ~/Music)"
 	m.Inputs[0].Prompt = "  Output Dir: "
 	m.Inputs[0].SetValue(config.C.OutputDir)
 	m.Inputs[0].Focus()
 
 	// File Format
 	m.Inputs[1] = textinput.New()
-	m.Inputs[1].Placeholder = "File Format (mp3, flac, opus, m4a)"
+	m.Inputs[1].Placeholder = "File Format (mp3, flac, opus, m4a, aac)"
 	m.Inputs[1].Prompt = "      Format: "
 	m.Inputs[1].SetValue(config.C.Quality)
 
@@ -41,6 +42,18 @@ func NewSettingsModel() SettingsModel {
 	m.Inputs[2].Placeholder = "Max Concurrent Downloads"
 	m.Inputs[2].Prompt = "  Concurrent: "
 	m.Inputs[2].SetValue(strconv.Itoa(config.C.MaxConcurrent))
+
+	// Connections
+	m.Inputs[3] = textinput.New()
+	m.Inputs[3].Placeholder = "Parallel Connections (aria2c -x)"
+	m.Inputs[3].Prompt = " Connections: "
+	m.Inputs[3].SetValue(strconv.Itoa(config.C.Connections))
+
+	// Splits
+	m.Inputs[4] = textinput.New()
+	m.Inputs[4].Placeholder = "File Splits (aria2c -s)"
+	m.Inputs[4].Prompt = "      Splits: "
+	m.Inputs[4].SetValue(strconv.Itoa(config.C.Splits))
 
 	return m
 }
@@ -102,13 +115,46 @@ func (m SettingsModel) Update(msg tea.Msg) (SettingsModel, tea.Cmd) {
 }
 
 func (m *SettingsModel) save() error {
-	config.C.OutputDir = strings.TrimSpace(m.Inputs[0].Value())
-	config.C.Quality = strings.TrimSpace(m.Inputs[1].Value())
-	
-	mc, err := strconv.Atoi(strings.TrimSpace(m.Inputs[2].Value()))
-	if err == nil && mc > 0 {
-		config.C.MaxConcurrent = mc
+	// 1. Output Dir (with tilde expansion)
+	outDir := strings.TrimSpace(m.Inputs[0].Value())
+	if outDir == "" {
+		return fmt.Errorf("output directory cannot be empty")
 	}
+	config.C.OutputDir = config.ExpandHome(outDir)
+
+	// 2. Format Validation
+	validFormats := map[string]bool{
+		"mp3": true, "flac": true, "opus": true, "m4a": true, "aac": true, "wav": true,
+	}
+	format := strings.ToLower(strings.TrimSpace(m.Inputs[1].Value()))
+	if !validFormats[format] {
+		return fmt.Errorf("unsupported format %q — use: mp3, flac, opus, m4a, aac, wav", format)
+	}
+	config.C.Quality = format
+
+	// 3. Max Concurrent
+	mc, err := strconv.Atoi(strings.TrimSpace(m.Inputs[2].Value()))
+	if err != nil || mc <= 0 {
+		return fmt.Errorf("concurrent limit must be a positive number")
+	}
+	config.C.MaxConcurrent = mc
+
+	// 4. Connections
+	conn, err := strconv.Atoi(strings.TrimSpace(m.Inputs[3].Value()))
+	if err != nil || conn <= 0 {
+		return fmt.Errorf("connections must be a positive number")
+	}
+	config.C.Connections = conn
+
+	// 5. Splits
+	splits, err := strconv.Atoi(strings.TrimSpace(m.Inputs[4].Value()))
+	if err != nil || splits <= 0 {
+		return fmt.Errorf("splits must be a positive number")
+	}
+	config.C.Splits = splits
+
+	// Update inputs in case tilde was expanded
+	m.Inputs[0].SetValue(config.C.OutputDir)
 
 	return config.Save()
 }

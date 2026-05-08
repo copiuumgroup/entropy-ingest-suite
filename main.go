@@ -4,6 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/copiuumgroup/entropy-cli/internal/config"
@@ -24,6 +27,13 @@ func main() {
 	}
 	if err := config.EnsureOutputDir(); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not create output dir %q: %v\n", config.C.OutputDir, err)
+	}
+
+	// ── Dependencies ──────────────────────────────────────────────────────
+	if missing := checkDependencies(); len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "[entropy-cli] WARNING: missing dependencies: %s\n", strings.Join(missing, ", "))
+		fmt.Fprintln(os.Stderr, "  Downloads may fail. Install them and ensure they are in your PATH.")
+		fmt.Fprintln(os.Stderr)
 	}
 
 	// ── Headless modes ─────────────────────────────────────────────────────
@@ -63,7 +73,10 @@ func runHeadlessURL(url string) {
 	for _, r := range results {
 		fmt.Printf("  → %s — %s\n", r.Uploader, r.Title)
 		ch := make(chan ingest.Progress)
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for p := range ch {
 				fmt.Printf("\r  %s", p.Status)
 				if p.Speed != "" {
@@ -83,6 +96,7 @@ func runHeadlessURL(url string) {
 		if err := ingest.Download(r.URL, opts, ch); err != nil {
 			fmt.Fprintf(os.Stderr, "\nerror: %v\n", err)
 		}
+		wg.Wait()
 	}
 }
 
@@ -101,7 +115,10 @@ func runHeadlessFile(path string) {
 	for i, u := range urls {
 		fmt.Printf("[%d/%d] %s\n", i+1, len(urls), u)
 		ch := make(chan ingest.Progress)
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for p := range ch {
 				fmt.Printf("\r  %s", p.Status)
 				if p.Speed != "" {
@@ -121,6 +138,7 @@ func runHeadlessFile(path string) {
 		if err := ingest.Download(u, opts, ch); err != nil {
 			fmt.Fprintf(os.Stderr, "\nerror: %v\n", err)
 		}
+		wg.Wait()
 	}
 }
 
@@ -138,5 +156,15 @@ func runHeadlessSearch(query string) {
 		}
 		fmt.Printf("%d. %s — %s%s\n   %s\n", i+1, r.Uploader, r.Title, dur, r.URL)
 	}
+}
+
+func checkDependencies() []string {
+	var missing []string
+	for _, bin := range []string{"yt-dlp", "aria2c", "ffmpeg"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			missing = append(missing, bin)
+		}
+	}
+	return missing
 }
 
