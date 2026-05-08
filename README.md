@@ -1,50 +1,59 @@
-# 🔳 Entropy Ingest Suite (EIS)
+# Entropy CLI
 
-A high-performance, local-first media environment for professional audio/video discovery and ingestion. Built with a monolithic OLED-optimized aesthetic and a high-velocity multi-threaded download engine.
+A high-performance, standalone media ingest engine and TUI for YouTube and SoundCloud.
 
----
+Entropy CLI is designed for speed, reliability, and ease of use. It replaces the original Electron-based suite with a native Go implementation, offering a robust terminal-based workflow for downloading and managing your music library.
 
-## ✨ Features
+## Features
 
-- **High-Velocity Pipeline**: Multi-threaded downloads powered by `yt-dlp` and `aria2c` with built-in metadata resilience.
-- **Unified Hub**: Search (YouTube & SoundCloud), prepare, and download in one persistent workflow.
-- **Media Library**: Auto-import to local storage, seamless handoffs to VLC/MPV.
-- **Monolith Aesthetics**: Hardware-accelerated blurs, Mica support on Windows 11, and infinite void contrast.
+- **Blazing Fast Ingestion**: Powered by `yt-dlp` and `aria2c` for maximum speed.
+- **TUI Interface**: Beautiful, responsive terminal user interface built with `Bubble Tea`.
+- **Batch Processing**: Import URLs from text files or paste multi-line lists from the clipboard.
+- **Concurrent Limits**: Intelligent queue management to prevent system thrashing.
+- **Library Management**: View and sort your library with native ID3 tag reading.
+- **Headless Mode**: Full support for CLI flags for scripting and automation.
 
----
+## Prerequisites
 
-## 💻 Two Environments
+Ensure the following tools are in your system `PATH`:
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [aria2c](https://aria2.github.io/)
+- [ffmpeg](https://ffmpeg.org/)
 
-Entropy Ingest Suite ships with two optimized frontends:
+## Installation
 
-### 1. Entropy Studio (Electron/React)
-The full visual desktop experience.
-- **Stack**: Electron, React 19, Tailwind CSS v4, Dexie.js
-- **Run**: `npm run dev`
-- **Build**: `npm run package`
-
-### 2. Entropy CLI (Go TUI)
-A blazingly fast, highly-responsive keyboard-driven terminal interface.
-- **Stack**: Go 1.23+, Bubble Tea, native yt-dlp orchestration
-- **Run**: `npm run dev:cli` (or `cd entropy-cli && go run main.go`)
-- **Build**: `cd entropy-cli && go build -o entropy.exe main.go`
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- `Node.js` & `npm`
-- `Go 1.23+` (if building the CLI)
-- System Binaries: `yt-dlp`, `aria2`, `ffmpeg` (must be in system PATH)
-
-### Installation
 ```bash
-git clone https://github.com/copiuumgroup/entropy-ingest-suite.git
-cd entropy-ingest-suite
-npm install
+# Clone the repository
+git clone https://github.com/copiuumgroup/entropy-cli
+cd entropy-cli
+
+# Build the binary
+go build -o entropy
 ```
 
----
+## Usage
 
-*Intellectual property of **copiuum group**.*
+### TUI Mode
+Simply run the binary to launch the interactive interface:
+```bash
+./entropy
+```
+
+### Headless Mode
+```bash
+./entropy -url "https://www.youtube.com/watch?v=..."
+./entropy -file urls.txt
+./entropy -search "lofi hip hop"
+```
+
+## Configuration
+
+Settings are stored in `~/.config/entropy-cli/config.toml`. You can configure:
+- `output_dir`: Where files are saved.
+- `quality`: Audio format (mp3, flac, opus, m4a).
+- `max_concurrent`: Number of simultaneous downloads.
+- `connections`: Aria2c parallel connections.
+
+## License
+
+MIT
