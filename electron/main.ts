@@ -60,6 +60,7 @@ protocol.registerSchemesAsPrivileged([
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
   app.commandLine.appendSwitch('enable-features', 'WaylandWindowDecorations');
+  app.commandLine.appendSwitch('disable-features', 'WaylandWpColorManagerV1');
 }
 
 function createWindow() {

@@ -8,6 +8,7 @@
   "author": "copiuum group",
   "scripts": {
     "dev": "vite",
+    "dev:cli": "cd entropy-cli && go run .",
     "bump": "node scripts/bump-version.js",
     "build": "npm run bump && tsc -b && vite build",
     "lint": "eslint .",
